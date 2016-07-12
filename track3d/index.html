@@ -200,11 +200,11 @@
       var canvas = document.getElementById('canvas');
       var context = canvas.getContext('2d');
 	
-	var tracker = new tracking.ColorTracker(['yellow']);
-	//var tracker = new tracking.ObjectTracker('face');
-     // tracker.setInitialScale(1);
-      //tracker.setStepSize(4);
-      //tracker.setEdgesDensity(0.1);
+	//var tracker = new tracking.ColorTracker(['yellow']);
+	var tracker = new tracking.ObjectTracker('face');
+      tracker.setInitialScale(1);
+      tracker.setStepSize(4);
+      tracker.setEdgesDensity(0.1);
 	
 	
       tracking.track('#video', tracker, { camera: true });
