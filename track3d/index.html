@@ -1,0 +1,2204 @@
+
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>FACE</title>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+		  <link rel="stylesheet" href="assets/demo.css">
+		  <script src="js/tracking-min.js"></script>
+		  <script src="js/data/face-min.js"></script>
+		  <script src="assets/stats.min.js"></script>
+		  <script src="assets/color_camera_gui.js"></script>
+		<style>
+			body {
+				color:#fff;
+				background:#000;
+				padding:0;
+				margin:0;
+				font-family: Avenir, Helvetica, Arial, sans-serif;
+				font-size:13px;
+				height:100%;
+			}
+			
+			  video, canvas {
+				position: absolute;
+				z-index: 100000;
+				
+			  }
+			  
+			a { color: #fff }
+
+			#info {
+				position: absolute;
+				top: 0px; width: 100%;
+				color: #eee;
+				padding: 5px 0px;
+				text-align:center;
+				z-index:1000;
+				display: block;
+			}
+
+			#buttonsLeft {
+				position: absolute;
+				bottom: 5em;
+				left: 1em;
+				border: solid 0px white;
+				z-index:1000;
+			}
+
+			#buttonsRight {
+				position: absolute;
+				bottom: 1em;
+				right: 1em;
+				border: solid 0px white;
+				z-index:1000;
+
+				display: none;
+			}
+
+			.button {
+				padding: 0em;
+				margin-bottom: 5px;
+				background: rgba( 0, 0, 0, 0.0 );
+				border: solid 0px #000;
+				color: black;
+				cursor: pointer;
+				display: none;
+			}
+
+			.button img { width:100px; }
+
+			.buttonz:hover {
+				background: #888;
+			}
+
+			.one {
+				opacity: 0;
+				-webkit-animation: dot 1.3s infinite;
+				-webkit-animation-delay: 0.0s;
+				animation: dot 1.3s infinite;
+				animation-delay: 0.0s;
+			}
+
+			.two {
+				opacity: 0;
+				-webkit-animation: dot 1.3s infinite;
+				-webkit-animation-delay: 0.2s;
+				  animation: dot 1.3s infinite;
+				  animation-delay: 0.2s;
+			}
+
+			.three {
+				opacity: 0;
+				-webkit-animation: dot 1.3s infinite;
+				-webkit-animation-delay: 0.3s;
+				 animation: dot 1.3s infinite;
+				 animation-delay: 0.3s;
+			}
+
+			@-webkit-keyframes dot {
+				  0% { opacity: 0; }
+				 50% { opacity: 0; }
+				100% { opacity: 1; }
+			}
+
+			@keyframes dot {
+				  0% { opacity: 0; }
+				 50% { opacity: 0; }
+				100% { opacity: 1; }
+			}
+
+			#debugOuter {
+				position: absolute;
+				width: 90%;
+				z-index: 2000;
+				display: none;
+				top: 0;
+				color: #0f0;
+				margin: 1em;
+				font-size: 1.5em;
+			}
+
+			#helpOuter {
+				position: absolute;
+				width: 100%;
+				z-index: 2000;
+				display: none;
+				top: 0;
+			}
+
+			#help {
+				background: rgba(0,0,0, 0.75);
+				color: #aaa;
+				border: solid 0px #fff;
+				margin: 0em auto;
+				padding: 0.5em 2em;
+				width: 30em;
+				line-height: 1.5em;
+			}
+
+			.key { font-weight: bold; color: #fff }
+
+			.shadow {
+				box-shadow:0px 3px 15px rgba(0,0,0,1);
+			   -moz-box-shadow:0px 3px 15px rgba(0,0,0,1);
+			   -webkit-box-shadow:0px 3px 15px rgba(0,0,0,1);
+			   -khtml-box-shadow:0px 3px 15px rgba(0,0,0,1);
+			}
+
+			#oldie div {
+				color:#fff;
+				font-size: 1.25em;
+			}
+
+			#oldie a { color: #a00; }
+
+			.loading { font-family: Helvetica, Arial, sans-serif ; font-size: 10px ; background: #555; color: white; padding: 0.25em 1em; position: absolute; right:0px; top: 0px; z-index: 200; }
+
+			#stats { position: absolute; top: 5px; left: 5px; }
+			#stats #fps { background: transparent !important }
+			//#stats #fps #fpsText { color: #191919 !important }
+			#stats #fps #fpsText { color: #333 !important }
+			#stats #fps #fpsGraph { display: none }
+
+		</style>
+	</head>
+
+	<body>
+		<div id="loadingEmily" class="loading">LOADING <span class="one">.</span><span class="two">.</span><span class="three">.</span></div>
+
+		<div id="debugOuter">
+		</div>
+
+		<div id="helpOuter">
+			<div id="help" class="shadow">
+				<h2>Keyboard</h2>
+
+				<ul>
+				<li><span class="key">U:</span> toggle ultra visual quality mode</li>
+				<li><span class="key">R:</span> randomize lights</li>
+				<li><span class="key">M:</span> change eye behavior mode</li>
+				<li><span class="key">G:</span> toggle fullscreen</li>
+				<li><span class="key">Z:</span> toggle zoom</li>
+				<li><span class="key">H:</span> toggle help</li>
+				</ul>
+
+			</div>
+		</div>
+
+		 <video id="video" width="320" height="240" preload autoplay loop muted controls></video>
+      <canvas id="canvas" width="320" height="240"></canvas>
+	  
+	    <script>
+		
+		
+		var xxx = 1;
+		var yyy = 1;
+    window.onload = function() {
+      var video = document.getElementById('video');
+      var canvas = document.getElementById('canvas');
+      var context = canvas.getContext('2d');
+	
+	var tracker = new tracking.ColorTracker(['yellow']);
+	//var tracker = new tracking.ObjectTracker('face');
+     // tracker.setInitialScale(1);
+      //tracker.setStepSize(4);
+      //tracker.setEdgesDensity(0.1);
+	
+	
+      tracking.track('#video', tracker, { camera: true });
+
+      tracker.on('track', function(event) {
+	  
+	  //console.log(event.data[0]);
+        context.clearRect(0, 0, canvas.width, canvas.height);
+		xxx = 1;
+		yyy = 1;
+        //event.data.forEach(function(rect) {
+		if (event.data.length != 0) {
+		var rect = event.data[0];
+		console.log(rect)
+		
+          //if (rect.color === 'custom') {
+          //  rect.color = colors.customColor;
+          //}
+
+          context.strokeStyle = rect.color;
+          context.strokeRect(rect.x, rect.y, rect.width, rect.height);
+          context.font = '11px Helvetica';
+          context.fillStyle = "#fff";
+          context.fillText('x: ' + rect.x + 'px', rect.x + rect.width + 5, rect.y + 11);
+          context.fillText('y: ' + rect.y + 'px', rect.x + rect.width + 5, rect.y + 22);
+		  
+		  xxx = (rect.x + rect.width/2) / 320;
+		  yyy = (rect.y + rect.height/2) / 240;
+			//xxx = ((rect.x + rect.width/2) - 160) * 0.7;
+			//yyy = ((rect.y + rect.height/2) / - 120) * 0.5;
+		
+		//}); //end foreach
+		}
+      });
+
+     //initGUIControllers(tracker);
+    };
+  </script>
+	  
+	  
+	  
+		
+		<script src="js/xg.min.rgba.js"></script>
+		<script src="js/libs/stats.min.js"></script>
+		<script src='js/ColorCorrectionShader.js'></script>
+
+		<script>
+			if ( ! Detector.webgl || ! Detector.deferredCapable ) {
+
+				var loadingElement2 = document.getElementById( "loadingEmily" );
+				loadingElement2.style.display = "none";
+
+				Detector.addGetWebGLMessage( { fallbackImg: "img/emily.jpg" } );
+
+			} else {
+
+			// --------------------------------------------------------------
+
+			var useMRT = true;
+			var useShaderTextures = true;
+
+			// platform-specific compatibility fixes
+			// (mostly things that are supposed to work but are broken anyways)
+			// (so much for feature detection)
+
+			var isChrome   = navigator.userAgent.toLowerCase().indexOf( "chrome" ) >= 0;
+			var isSafari   = navigator.userAgent.toLowerCase().indexOf( "safari" ) >= 0 && !isChrome;
+			var isFirefox  = navigator.userAgent.toLowerCase().indexOf( "firefox" ) >= 0;
+			var isExplorer = navigator.userAgent.toLowerCase().indexOf( "trident" ) >= 0;
+			var isOSX 	   = navigator.platform.toLowerCase().indexOf( "mac" ) >= 0;
+
+			// Firefox on OSX fails with multiple-render-targets
+
+			if ( isOSX && isFirefox ) useMRT = false;
+
+			// Safari on OSX fails video textures and 2d canvas textures
+			// shader textures cause erratic freezes
+
+			if ( isOSX && isSafari ) {
+
+				useShaderTextures = false;
+
+			}
+
+			// --------------------------------------------------------------
+
+			var debugStr = navigator.userAgent;
+			debugStr += "<br/><br/>shader: " + useShaderTextures;
+			debugStr += "<br/><br/>Safari: " + isSafari + "<br/>Firefox: " + isFirefox + "<br/>Explorer: " + isExplorer + "<br/>Chrome: " + isChrome;
+
+			var elDebug = document.getElementById( "debugOuter" );
+			elDebug.innerHTML = debugStr;
+
+			var debugVisible = false;
+
+			// --------------------------------------------------------------
+
+			var currentHead = "headEmily";
+
+			// --------------------------------------------------------------
+
+			var BRIGHTNESS = 0.5;
+
+			var MARGIN = 0;
+			var SCALE = 0.8 / window.devicePixelRatio;
+
+			var ULTRA_THRESHOLD = 4000;
+
+			var SIDE_MARGIN = 0;
+			var IMG_WIDTH = 1520;
+			//if ( window.innerWidth > IMG_WIDTH ) SIDE_MARGIN = ( window.innerWidth - IMG_WIDTH ) * 0.5;
+
+			var WIDTH = window.innerWidth - 2 * SIDE_MARGIN;
+			var HEIGHT = window.innerHeight - 2 * MARGIN;
+
+			var statsEnabled = true;
+			var isUltra = false;
+
+			var eyeRigEnabled = true;
+
+			var initEyeBehaviorType = 0; // 0, 1
+			var initEyeBehaviorCountDown = 10;
+
+			var effectColorCorrection;
+			var effectLens;
+
+			//
+
+			var useKeyLight = true;
+			var useBackLight = true;
+			var useFillLight = true;
+
+			//
+
+			var cameraConfig = [
+				[ 11, -10, 310, 1700 ],
+				[  5, 0, 480, 3000 ],
+				[ 11, -10, 310, 1700 ],
+				[ 14, -10, 320, 1800 ],
+				[ 15, -10, 380, 2300 ],
+				[ 14, -10, 320, 1800 ],
+			];
+
+			var cameraIndex = 0;
+
+			//
+
+			var diffuseComposer;
+			var diffuseUniforms;
+
+			//
+
+			var backFull, backA, backB;
+
+			//
+
+			var leftPlane  = new XG.Plane();
+			var rightPlane = new XG.Plane();
+
+			var leftPupilPosition = new XG.Vector3();
+			var rightPupilPosition = new XG.Vector3();
+
+			var leftPupilUpPosition = new XG.Vector3();
+			var rightPupilUpPosition = new XG.Vector3();
+
+			var leftPupilSidePosition = new XG.Vector3();
+			var rightPupilSidePosition = new XG.Vector3();
+
+			var leftLensPosition = new XG.Vector3();
+			var rightLensPosition = new XG.Vector3();
+
+			var leftHitPosition = new XG.Vector3();
+			var rightHitPosition = new XG.Vector3();
+
+			var keyLightPosition = new XG.Vector3();
+			var fillLightPosition = new XG.Vector3();
+			var fillLight2Position = new XG.Vector3();
+
+			var originToPoint = new XG.Vector3();
+			var unitAxisVector = new XG.Vector3();
+
+			//
+
+			var elHelp = document.getElementById( "helpOuter" );
+			var helpVisible = false;
+
+
+			// --------------------------------------------------------------
+
+			var configHeads = {
+
+				// EMILY
+
+				"headEmily" :
+				{
+					"root"		: null,
+					"rootOffset": [ 0, -15, 0 ],
+					"meshOffset": [ 0, -0, 50 ],
+
+					"eyeScale" 	  : 150 * 1.03,
+					"leftEyePos"  : [  41, 154, 90.05 + 2 ],
+					"rightEyePos" : [ -62.0 - 1, 147, 96.25 + 2 ],
+
+					"eyesInnerRightRot" : [ 0.0, Math.PI, 0.0 ],
+					"eyesInnerLeftRot"  : [ 0.0, Math.PI, 0.0 ],
+
+					"diffuseMap": "models/ctm/emily/00_diffuse_unlit_raw2.jpg",
+					"bumpMap"	: "models/ctm/emily/00_displacement.jpg",
+					"glossMap"	: "models/ctm/emily/00_specular_unlit_unpainted3.jpg",
+
+					"irises" 	: [
+									{
+										type: "phong",
+
+										map: "eyeDynamicPupilMap",
+										dynamicData:
+										{
+											map: "eyeBlueMap",
+											pupilSize: 			155,
+											pupilMaxSize: 		155,
+											irisSaturation: 	0.5,
+											irisBrightness: 	0.9,
+											scleraBrightness: 	0.85,
+											causticBrightness:	4
+										},
+
+										bumpMap: "eyeBumpMap",
+										bumpScale: 5
+									},
+
+								],
+
+					"currentIrisTextureType"	: null,
+					"currentOverlayTextureType"	: null,
+					"currentOverlayData"		: null,
+					"currentDynamicData"		: null,
+
+					"diffuseTex" : null,
+					"bumpTex"    : null,
+					"glossTex"   : null,
+
+					"itemsToLoad": 4,
+					"itemCounter": 0,
+
+					"meshes" :
+					{
+						"leftEye" 		 : null,
+						"rightEye"		 : null,
+						"leftEyeOverlay" : null,
+						"rightEyeOverlay": null,
+						"head"	  		 : null
+					},
+
+					"headMaterials" 	: [],
+					"headMaterialsIndex": 0,
+
+					"lightColorHSV"		 : [ 0.6, 0.15, 1 ],
+					"backLightMultiplier": 2.0,
+					"backLightBaseline"  : 0.5,
+
+					"loadingElement" : null,
+
+					"eyeFollow" 	  		: false,
+					"eyeBehaviorType" 		: initEyeBehaviorType,
+					"eyeBehaviorCountDown"	: initEyeBehaviorCountDown,
+
+					"loaded" : false
+
+				},
+
+			};
+
+			var headList = [];
+			for ( var id in configHeads ) {
+
+				var head = configHeads[ id ];
+				headList.push( head );
+
+			}
+
+			// --------------------------------------------------------------
+
+			var commonObjects = {};
+
+			// --------------------------------------------------------------
+
+			var shadowSides = [ 0, 5, 5, 5, 1 ];
+
+			var lightPositions = [ -1200, -750, 0, 750, 1200 ];
+			var lightAngles = [ -0.2, -0.1, 0.1, 0.15, 0.2 ];
+			var lightIndex = 0;
+
+			// --------------------------------------------------------------
+
+			var container, stats, loader;
+			var camera, scene, renderer;
+
+			var keyLight;
+			var backLight;
+			var fillLight;
+			var fillLight2;
+
+			var keyLightRig;
+			var fillLightRig;
+
+			var clock = new XG.Clock();
+
+			//
+
+			var mouseX = 0;
+			var mouseY = 0;
+
+			var targetX = 0, targetY = 0;
+
+			var windowHalfX = window.innerWidth / 2;
+			var windowHalfY = window.innerHeight / 2;
+
+			var cameraTarget = new XG.Vector3( 0, 0, 0 );
+
+			var eyeTarget = new XG.Vector3( 0, 0, 0 );
+			var eyeX = 0;
+			var eyeY = 0;
+
+			var eyeTicker = 0;
+			var eyeTargetSelected = false;
+			var eyeInterval1 = 2;
+			var eyeInterval2 = 4;
+			var eyeRangeLo = 0.5;
+			var eyeRangeHi = 1.5;
+
+			var gpuData;
+
+			//
+
+			configHeads[ "headEmily" ][ "loadingElement"] = document.getElementById( "loadingEmily" );
+
+			//
+
+			function init() {
+
+				container = document.createElement( 'div' );
+				document.body.appendChild( container );
+
+				//
+
+				scene = new XG.Scene();
+
+				camera = new XG.PerspectiveCamera( 11, WIDTH / HEIGHT, 50, 7000 );
+				camera.position.set( 0, 320, 1800 );
+				cameraTarget.set( 0, 150, 600 );
+				camera.lookAt( cameraTarget );
+
+				// LIGHTS
+
+				if ( useKeyLight ) {
+
+					var intensity = 3.5;
+					var radius = 100;
+					var color = 0xffffff;
+					var distance = 3000;
+
+					keyLight = new XG.SphereLight( color, intensity, distance, radius );
+					keyLight.position.set( 0, 0, 1100 );
+
+					keyLight.castShadow = true;
+					keyLight.shadowDarkness = 1;
+					keyLight.shadowCameraNear = 1;
+					keyLight.shadowCameraFar = distance;
+					keyLight.shadowMapWidth = 512;
+					keyLight.shadowMapHeight = 512;
+
+					keyLightRig = new XG.Node();
+					keyLightRig.add( keyLight );
+					scene.add( keyLightRig );
+
+					keyLightRig.rotation.x = -0.2;
+
+				}
+
+				if ( useBackLight ) {
+
+					var intensity = 0.5;
+					var radius = 50;
+					var color = 0xffffff;
+					var distance = 2000;
+					var col = configHeads[ currentHead ]["lightColorHSV"];
+
+					backLight = new XG.SphereLight( color, intensity, distance, radius );
+					backLight.position.set( 700, -150, -201 );
+					backLight.color.setHSV( col[0], col[1], col[2] );
+					scene.add( backLight );
+
+					backLight.castShadow = true;
+					backLight.shadowDarkness = 1;
+					backLight.shadowCameraNear = 1;
+					backLight.shadowCameraFar = distance;
+					backLight.shadowMapWidth = 128 * 1;
+					backLight.shadowMapHeight = 128 * 1;
+
+					backLight.forwardShadowSide = 1;
+
+				}
+
+				if ( useFillLight ) {
+
+					var intensity = 1.75;
+					var radius = 50;
+					var color = 0xffffff;
+					var distance = 3000;
+					var col = configHeads[ currentHead ]["lightColorHSV"];
+
+					fillLight = new XG.SphereLight( color, intensity, distance, radius );
+					fillLight.position.set( 0, 0, 1100 );
+					fillLight.color.setHSV( col[0], col[1], col[2] );
+
+					fillLight.castShadow = true;
+					fillLight.shadowDarkness = 1;
+					fillLight.shadowCameraNear = 1;
+					fillLight.shadowCameraFar = distance;
+					fillLight.shadowMapWidth = 128 * 2;
+					fillLight.shadowMapHeight = 128 * 2;
+
+					fillLightRig = new XG.Node();
+					fillLightRig.add( fillLight );
+					scene.add( fillLightRig );
+
+					fillLightRig.rotation.x = -0.2;
+
+				}
+
+				if ( useFillLight ) {
+
+					var intensity = 1.05;
+					var radius = 20;
+					var color = 0xffffff;
+					var distance = 3000;
+					var col = configHeads[ currentHead ]["lightColorHSV"];
+
+					fillLight2 = new XG.SphereLight( color, intensity, distance, radius );
+					fillLight2.position.set( -200, -150, 251 );
+					fillLight2.color.setHSV( col[0], col[1], col[2] );
+					scene.add( fillLight2 );
+
+					fillLight2.castShadow = true;
+					fillLight2.shadowDarkness = 1;
+					fillLight2.shadowCameraNear = 1;
+					fillLight2.shadowCameraFar = distance;
+					fillLight2.shadowMapWidth = 128 * 2;
+					fillLight2.shadowMapHeight = 128 * 2;
+
+				}
+
+				addBackground();
+
+				// MODELS (COMMON PARTS)
+
+				// static textures configuration
+
+				var textureConfigs = [
+					{ "label": "clutMap",			"url": "textures/clut/bw.png" },
+					{ "label": "detailMap",			"url": "models/ctm/head/detailmapBump.jpg" },
+					{ "label": "eyeBumpMap", 		"url": "models/ctm/eye/eyeBump.jpg" },
+					{ "label": "eyeBlueMap", 		"url": "models/ctm/eye/eyeBlue.jpg" }
+
+				];
+
+				// static textures
+
+				for ( var i = 0, il = textureConfigs.length; i < il; i ++ ) {
+
+					var textureConfig = textureConfigs[ i ];
+					var label = textureConfig[ "label" ];
+					var url = textureConfig[ "url" ];
+
+					var map = XG.ImageUtils.loadTexture( url );
+					map.anisotropy = 8;
+
+					commonObjects[ label ] = map;
+
+				}
+
+				// special textures
+
+				var clut = commonObjects[ "clutMap" ];
+				clut.minFilter = clut.magFilter = XG.NearestFilter;
+				clut.anisotropy = 0;
+				clut.flipY = false;
+
+				var detailMap = commonObjects[ "detailMap" ];
+				detailMap.wrapS = detailMap.wrapT = XG.RepeatWrapping;
+				detailMap.anisotropy = 8;
+
+				var dummyWhiteMap = XG.ImageUtils.generateDataTexture( 4, 4, new XG.Color( 0xffffff ) );
+				var dummyBlackMap = XG.ImageUtils.generateDataTexture( 4, 4, new XG.Color( 0x000000 ) );
+				dummyWhiteMap.anisotropy = 8;
+				dummyBlackMap.anisotropy = 8;
+
+				commonObjects[ "whiteMap" ] = dummyWhiteMap;
+				commonObjects[ "blackMap" ] = dummyBlackMap;
+
+				commonObjects[ "eyeDynamicPupilMap" ] = dummyBlackMap;
+
+				// materials
+
+				var eyesOuterMaterial = new XG.PhongMaterial( {
+
+					"color"	  		: 0x000000,
+					"specular"		: 0xcccccc,
+					"shininess"		: 8192,
+					"transparent" 	: true,
+					"opacity"		: 0.99,
+					"blending"		: XG.AdditiveBlending
+
+
+				} );
+
+				var eyesInnerPhongMaterial = new XG.PhongMaterial( {
+
+					"map"		: dummyWhiteMap,
+					"specularMap": dummyWhiteMap,
+					"bumpScale"	: 1.0,
+					"color"	  	: 0xffffff,
+					"specular"	: 0x2b2b2b,
+					"shininess"	: 0,
+					"wrapAround": true,
+
+
+				} );
+
+				eyesInnerPhongMaterial.specular.setHSV( 0, 0, 0.95 );
+				eyesInnerPhongMaterial.shininess = 20;
+
+				commonObjects[ "eyesOuterMaterial" ] = eyesOuterMaterial;
+				commonObjects[ "eyesInnerPhongMaterial" ] = eyesInnerPhongMaterial;
+
+				//
+
+				loader = new XG.CTMLoader();
+				loader.load( "models/ctm/eye/eyeCurved.ctm", 	function( geometry )  { commonObjects[ "eyeInnerCurvedGeo" ] = geometry; eyeInnerCurvedLoadedCallback( geometry ); } );
+				loader.load( "models/ctm/eye/eye.ctm", 			function( geometry )  { commonObjects[ "eyeInnerGeo" ] = geometry; eyeInnerLoadedCallback( geometry ); } );
+				loader.load( "models/ctm/eye/lens.ctm", 		function( geometry )  { commonObjects[ "eyeOuterGeo" ] = geometry; eyeOuterLoadedCallback( geometry ); } );
+
+				// MODELS
+
+				loadTextures( "headEmily", loadCallbackEmily );
+
+				loader.load( "models/ctm/emily/emily_head.ctm", function( geometry ) { createScene2( "headEmily", geometry, 17 ) } );
+
+				// RENDERER
+
+				var pars =
+				{
+					"antialias": true,
+					"dither": true,
+					"tonemapping": XG.Filmic2015Operator,
+					"brightness": BRIGHTNESS,
+					"clearColor": 0x040404, "clearAlpha": 1, "alpha": false,
+					"width": WIDTH, "height": HEIGHT, "scale": SCALE,
+					"useMultipleRenderTargets": useMRT
+				};
+
+				renderer = new XG.DeferredRenderer( pars );
+
+				renderer.domElement.style.position = "absolute";
+				renderer.domElement.style.top = MARGIN + "px";
+				//renderer.domElement.style.left = "0px";
+				//renderer.domElement.style.top = "0px";
+				renderer.domElement.style.left = SIDE_MARGIN + "px";
+
+				renderer.domElement.style.position = "absolute";
+				container.appendChild( renderer.domElement );
+
+				//
+
+				renderer.shadowMapEnabled = true;
+				renderer.shadowMapUseDepthTextures = true;
+				renderer.shadowMapCullFace = XG.CullFaceNone;
+				renderer.shadowMapType = XG.PCFSoftHQShadowMap;
+
+				renderer.shadowMapSlopeDepthBias = true;
+				renderer.shadowMapSlopeScale = 8;
+				renderer.shadowMapSlopeBias = 0;
+				renderer.shadowMapSlopeMax = 0.5;
+
+				renderer.shadowMapDepthTextureBias = 0.04;
+
+				//renderer.shadowMapDebug = true;
+
+				//
+
+				renderer.dofEnabled = true;
+				renderer.dofAutofocus = true;
+				renderer.dofFancy = true;
+				renderer.dofLensFstop = 1.4;
+				renderer.dofLensBlurScale = 12;
+				renderer.dofAutofocusPoint.y = 0.25;
+
+				renderer.dofFocusWidth = 100;
+				renderer.dofFocusRampWidth = 100;
+				renderer.dofMaxBlur = 0.2;
+
+				var fovRad = XG.Math.degToRad( camera.fov );
+				renderer.dofLensFocalLength = XG.Math.fovToFocalLength( fovRad, 24 );
+
+				//
+
+				renderer.whitePoint = 2;
+
+				// POST-EFFECTS
+
+				if ( renderer instanceof XG.DeferredRenderer ) {
+
+					var effectColor = new XG.ShaderPass( XG.ColorCorrectionShader );
+					effectColor.uniforms.powRGB.value.set( 1.1, 1.1, 1.1 );
+					effectColor.uniforms.mulRGB.value.set( 1.1, 1.1, 1.1 );
+
+					effectColorCorrection = new XG.ShaderPass( XG.CLUTShader );
+					effectColorCorrection.material.uniforms.tCLUT.value = clut;
+
+					renderer.addEffect( effectColorCorrection );
+					renderer.addEffect( effectColor );
+
+				}
+
+				// STATS
+
+				if ( statsEnabled ) {
+
+					stats = new Stats();
+					container.appendChild( stats.domElement );
+
+				}
+
+				// EVENTS
+
+				document.addEventListener( 'mousemove', onDocumentMouseMove, false );
+				document.addEventListener( 'keydown', onDocumentKeyDown, false );
+				renderer.domElement.addEventListener( 'click', onClick, false );
+				window.addEventListener( 'resize', onWindowResize, false );
+
+				//
+
+				if ( useShaderTextures ) {
+
+					setupDynamicTexture();
+
+				}
+
+				// INITIAL STATE
+
+				var gpuDetector = new GPUDetector();
+				gpuData = gpuDetector.detectGPU();
+
+				if ( gpuData && gpuData.rawScore >= ULTRA_THRESHOLD ) toggleUltra();
+
+				setLights( 0.25 );
+				setZoom( 0 );
+				refreshDebug();
+
+			}
+
+			function setupDynamicTexture() {
+
+				var rtWidth  = 512 * 1;
+				var rtHeight = 512 * 1;
+
+				var rtParamsUByte = { "minFilter": XG.LinearMipMapLinearFilter, "magFilter": XG.LinearFilter,
+									  "wrapS": XG.RepeatWrapping, "wrapT": XG.RepeatWrapping,
+									  "stencilBuffer": false,
+									  "format": XG.RGBAFormat, "type": XG.UnsignedByteType };
+
+				var rtDiffuse = new XG.RenderTarget( rtWidth, rtHeight, rtParamsUByte );
+				rtDiffuse.generateMipmaps = true;
+				rtDiffuse.depthBuffer = false;
+				rtDiffuse.stencilBuffer = false;
+
+				var vertexShader = XG.ShaderChunk[ "vertexShaderFullscreenTriangleUV" ];
+
+				var uniformsDiffuse = {
+
+					"diffuseSource"	: { type: "t", value: null },
+					"resolution"	: { type: "v2", value: new XG.Vector2( 512, 512 ) },
+
+					"level"			: { type: "f", value: 0 },
+
+					"irisRadius"	: { type: "f", value: 0 },
+					"irisCenter"	: { type: "v2", value: new XG.Vector2( 0, 0 ) },
+
+					"causticCenter"	   : { type: "v2", value: new XG.Vector2( 0, 0 ) },
+					"causticBrightness": { type: "f", value: 0.0 },
+
+					"causticCenter2"	: { type: "v2", value: new XG.Vector2( 0, 0 ) },
+					"causticBrightness2": { type: "f", value: 0.0 },
+
+					"causticCenter3"	: { type: "v2", value: new XG.Vector2( 0, 0 ) },
+					"causticBrightness3": { type: "f", value: 0.0 },
+
+					"irisSaturation"  : { type: "f", value: 1.0 },
+					"irisBrightness"  : { type: "f", value: 1.0 },
+					"scleraBrightness": { type: "f", value: 1.0 },
+
+				};
+
+				var fragmentShaderDiffuse = [
+
+					"uniform sampler2D diffuseSource;",
+					"uniform vec2 resolution;",
+
+					"uniform float level;",
+
+					"uniform float irisRadius;",
+					"uniform vec2 irisCenter;",
+
+					"uniform vec2 causticCenter;",
+					"uniform float causticBrightness;",
+
+					"uniform vec2 causticCenter2;",
+					"uniform float causticBrightness2;",
+
+					"uniform vec2 causticCenter3;",
+					"uniform float causticBrightness3;",
+
+					"uniform float irisSaturation;",
+					"uniform float irisBrightness;",
+					"uniform float scleraBrightness;",
+
+					"varying vec2 vUv;",
+
+					"const vec3 LUMA = vec3( 0.2126, 0.7152, 0.0722 );",
+
+					"vec2 bulgePinch( vec2 coord, vec2 center, float radius, float strength ) {",
+
+						"vec2 tmpCoord = coord - center;",
+						"float distance = length( tmpCoord );",
+
+						"if ( distance < radius ) {",
+
+							"float percent = distance / radius;",
+							"if ( strength > 0.0 ) {",
+
+								"tmpCoord *= mix( 1.0, smoothstep( 0.0, radius / distance, percent ), strength * 0.75 );",
+
+							"} else {",
+
+								"tmpCoord *= mix( 1.0, pow( percent, 1.0 + strength * 0.75 ) * radius / distance, 1.0 - percent );",
+
+							"}",
+
+						"}",
+
+						"tmpCoord += center;",
+
+						"return tmpCoord;",
+
+					"}",
+
+					"void main() {",
+
+						"float s = clamp( -0.5 + level/100.0, -0.5, 0.75 );",
+						"vec2 texCoord = bulgePinch( vUv * resolution, irisCenter, irisRadius, s );",
+						"vec4 texel = texture2D( diffuseSource, texCoord / resolution );",
+
+						"float luma = dot( texel.rgb, LUMA );",
+
+						"float v = irisBrightness;",
+						"float r = length( vUv * resolution - irisCenter );",
+						"if ( r > irisRadius ) v = scleraBrightness;",
+						//"if ( r < irisRadius ) texel.rgb = mix( vec3( luma ), texel.rgb, irisSaturation )* vec3(0.999,0.75,0.5);",
+						"if ( r < irisRadius ) texel.rgb = mix( vec3( luma ), texel.rgb, irisSaturation );",
+
+						"gl_FragColor.rgb = texel.rgb * v;",
+						"gl_FragColor.a = 1.0;",
+
+						//
+
+						"float r2 = length( vUv * resolution - irisCenter + causticCenter );",
+						"float extraLight = max( 0.95 - r2 / irisRadius, 0.0 ) * causticBrightness;",
+						"if ( r > irisRadius ) extraLight = 0.0;",
+
+						"float r22 = length( vUv * resolution - irisCenter + causticCenter2 );",
+						"float extraLight2 = max( 0.95 - r22 / irisRadius, 0.0 ) * causticBrightness2;",
+						"if ( r > irisRadius ) extraLight2 = 0.0;",
+
+						"float r222 = length( vUv * resolution - irisCenter + causticCenter3 );",
+						"float extraLight3 = max( 0.95 - r222 / irisRadius, 0.0 ) * causticBrightness3;",
+						"if ( r > irisRadius ) extraLight3 = 0.0;",
+
+						"gl_FragColor.rgb += ( extraLight + extraLight2 + extraLight3 ) * gl_FragColor.rgb * gl_FragColor.rgb * ( 1.0 - r/irisRadius) * luma;",
+
+					"}"
+
+				].join("\n");
+
+				var diffuseShader = {
+
+					"fragmentShader": fragmentShaderDiffuse,
+					"vertexShader"	: vertexShader,
+					"uniforms"		: uniformsDiffuse
+
+				};
+
+				var passDiffuse = new XG.ShaderPass( diffuseShader );
+
+				diffuseComposer = new XG.EffectComposer( renderer.renderer, rtDiffuse );
+				diffuseComposer.addPass( passDiffuse );
+
+				var scaleX = rtWidth / 1024;
+				var scaleY = rtHeight / 1024;
+
+				var cx = rtWidth * 0.5 + 5 * scaleX;
+				var cy = rtHeight * 0.5 - 5 * scaleX;
+
+				var pupilRadius = 54 * scaleX;
+				var irisRadius = 180 * scaleX;
+
+				diffuseUniforms = passDiffuse.uniforms;
+				diffuseUniforms[ "resolution" ].value.set( rtWidth, rtHeight );
+
+				diffuseUniforms[ "irisCenter" ].value.set( cx, cy );
+				diffuseUniforms[ "irisRadius" ].value = irisRadius;
+
+				diffuseUniforms[ "diffuseSource" ].value = commonObjects[ "blackMap" ];
+
+				commonObjects[ "eyeDynamicPupilMap" ] = diffuseComposer.renderTarget1;
+
+			}
+
+			// --------------------------------------------------------------
+
+			function launchIntoFullscreen( element ) {
+
+				if( element.requestFullscreen ) {
+
+					element.requestFullscreen();
+
+				} else if( element.mozRequestFullScreen ) {
+
+					element.mozRequestFullScreen();
+
+				} else if( element.webkitRequestFullscreen ) {
+
+					element.webkitRequestFullscreen();
+
+				} else if( element.msRequestFullscreen ) {
+
+					element.msRequestFullscreen();
+				}
+
+			}
+
+			function exitFullscreen() {
+
+				if ( document.exitFullscreen ) {
+
+					document.exitFullscreen();
+
+				} else if( document.mozCancelFullScreen ) {
+
+					document.mozCancelFullScreen();
+
+				} else if( document.webkitExitFullscreen ) {
+
+					document.webkitExitFullscreen();
+
+				}
+
+			}
+
+			function isDocumentInFullScreenMode() {
+
+				// Note that the browser fullscreen (triggered by short keys) might
+				// be considered different from content fullscreen when expecting a boolean
+
+				return ( ( document.fullscreenElement && document.fullscreenElement !== null ) ||    // alternative standard methods
+						 document.mozFullScreen || document.webkitIsFullScreen );                    // current working methods
+
+			}
+
+			function toggleFullscreen() {
+
+				var isFullscreen = isDocumentInFullScreenMode();
+
+				if ( isFullscreen ) {
+
+					exitFullscreen();
+					MARGIN = 0;
+
+				} else {
+
+					launchIntoFullscreen( container );
+					MARGIN = 0;
+
+				}
+
+				renderer.domElement.style.top = MARGIN + "px";
+
+			}
+
+			function setZoom( index ) {
+
+				var cc = cameraConfig[ index ];
+
+				camera.fov = cc[0];
+				camera.position.set( cc[1], cc[2], cc[3] );
+
+				camera.updateProjectionMatrix();
+
+				var fovRad = XG.Math.degToRad( camera.fov );
+				renderer.dofLensFocalLength = XG.Math.fovToFocalLength( fovRad, 24 );
+
+			}
+
+			function toggleZoom() {
+
+				cameraIndex = ( cameraIndex + 1 ) % cameraConfig.length;
+				setZoom( cameraIndex );
+
+			}
+
+			//--------------------------------------------------------------
+
+			function setHead( id ) {
+
+				hideHead( currentHead );
+				showHead( id );
+
+				currentHead = id;
+
+			}
+
+			function showHead( id ) {
+
+				var head = configHeads[ id ]
+				var root = head[ "root" ];
+				if ( !root ) return;
+
+				var col = head[ "lightColorHSV" ];
+				keyLight.color.setHSV( col[0], col[1], col[2] );
+
+				root.traverse( function ( node ) {
+
+					node.visible = true;
+
+				} );
+
+			}
+
+			function hideHead( id ) {
+
+				var head = configHeads[ id ]
+				var root = head[ "root" ];
+				if ( !root ) return;
+
+				root.traverse( function ( node ) {
+
+					node.visible = false;
+
+				} );
+
+			}
+
+			function loadCallback( id ) {
+
+				var head = configHeads[ id ];
+
+				head[ "itemCounter" ] += 1;
+
+				if ( head[ "itemCounter" ] >= head[ "itemsToLoad" ] ) {
+
+					head[ "loadingElement" ].style.display = "none";
+					head[ "loaded" ] = true;
+
+				}
+
+			}
+
+			function loadCallbackEmily() {
+
+				loadCallback( "headEmily" );
+
+			}
+
+			// --------------------------------------------------------------
+
+			function eyesGate() {
+
+				var head = configHeads[ "headEmily" ];
+
+				if ( commonObjects[ "eyeInnerCurvedGeo" ] &&
+					 commonObjects[ "eyeInnerGeo" ] &&
+					 commonObjects[ "eyeOuterGeo" ] &&
+					 head[ "meshes" ][ "head" ] &&
+					 !head[ "meshes" ][ "leftEye" ] ) {
+
+					createEyes( "headEmily" );
+
+				}
+
+			}
+
+
+			function eyeInnerCurvedLoadedCallback( geometry ) {
+
+				geometry.computeBoundingBox();
+				XG.GeometryUtils.center( [ geometry ] );
+
+				//
+
+				eyesGate();
+
+			}
+
+			function eyeInnerLoadedCallback( geometry ) {
+
+				geometry.computeBoundingBox();
+				XG.GeometryUtils.center( [ geometry ] );
+
+				//
+
+				eyesGate();
+
+			}
+
+			function eyeOuterLoadedCallback( geometry ) {
+
+				geometry.computeBoundingBox();
+				XG.GeometryUtils.center( [ geometry ] );
+
+				//
+
+				eyesGate();
+
+			}
+
+
+			function headLoadedCallback() {
+
+				eyesGate();
+
+			}
+
+			// --------------------------------------------------------------
+
+			function loadTextures( id, callback ) {
+
+				var head = configHeads[ id ];
+				var diffuseMap = XG.ImageUtils.loadTexture( head[ "diffuseMap" ], callback );
+				var bumpMap = XG.ImageUtils.loadTexture( head[ "bumpMap" ], callback );
+				var glossMap = XG.ImageUtils.loadTexture( head[ "glossMap" ], callback );
+
+				diffuseMap.anisotropy = 8;
+				bumpMap.anisotropy = 8;
+				glossMap.anisotropy = 8;
+
+				head[ "diffuseTex" ] = diffuseMap;
+				head[ "bumpTex" ] = bumpMap;
+				head[ "glossTex" ] = glossMap;
+
+			}
+
+			// --------------------------------------------------------------
+
+			function createEyes( id ) {
+
+				var head = configHeads[ id ];
+				var root = head[ "root" ];
+				var meshes = head[ "meshes" ];
+				var innerCurvedGeometry = commonObjects[ "eyeInnerCurvedGeo" ];
+				var innerGeometry = commonObjects[ "eyeInnerGeo" ];
+				var outerGeometry = commonObjects[ "eyeOuterGeo" ];
+				var skinMaterial = meshes[ "head" ].materials[ 0 ];
+				var leftEyePos = head[ "leftEyePos" ];
+				var rightEyePos = head[ "rightEyePos" ];
+				var irises = head[ "irises" ];
+				var eyeScale = head[ "eyeScale" ];
+				var eyesInnerRightRot = head[ "eyesInnerRightRot" ];
+				var eyesInnerLeftRot = head[ "eyesInnerLeftRot" ];
+
+				// rig
+
+				var leftGyro = new XG.Gyroscope();
+				leftGyro.position.set( leftEyePos[0], leftEyePos[1], leftEyePos[2] );
+
+				var rightGyro = new XG.Gyroscope();
+				rightGyro.position.set( rightEyePos[0], rightEyePos[1], rightEyePos[2] );
+
+				root.add( leftGyro );
+				root.add( rightGyro );
+
+				// inner eyes
+
+				var eyesInnerPhongMaterial = commonObjects[ "eyesInnerPhongMaterial" ];
+				var eyesInnerEmissiveMaterial = commonObjects[ "eyesInnerEmissiveMaterial" ];
+				var eyesInnerMetallicMaterial = commonObjects[ "eyesInnerMetallicMaterial" ];
+				var eyesOverlayMaterial = commonObjects[ "eyesOverlayMaterial" ];
+				var irisMaterials = [];
+				var headMaterials = [];
+				var overlayMaterials = [];
+
+				for ( var i = 0, il = irises.length; i < il; i ++ ) {
+
+					var iris = irises[ i ];
+					var irisType = iris.type;
+
+					var irisBumpMap = commonObjects[ iris.bumpMap ];
+					var irisBumpScale = iris.bumpScale;
+
+					var irisMapSrc = iris.map;
+					var altMap = iris.altMap;
+					var requires = iris.requires;
+
+					if ( iris.dynamicData && ! useShaderTextures ) {
+
+						irisMapSrc = iris.dynamicData.map;
+						iris.dynamicData = {};
+
+					}
+
+					var irisMap = commonObjects[ irisMapSrc ];
+
+					//
+
+
+					if ( irisType === "phong" ) {
+
+						var irisMaterial = eyesInnerPhongMaterial.clone();
+						irisMaterial.map = irisMap;
+
+						if ( iris.specularMap ) {
+
+							irisMaterial.specularMap = commonObjects[ iris.specularMap ];
+
+						} else {
+
+							irisMaterial.specularMap = commonObjects[ "blackMap" ];
+
+						}
+
+					}
+
+					if ( irisBumpMap ) {
+
+						irisMaterial.bumpMap = irisBumpMap;
+
+						if ( irisBumpScale !== undefined ) {
+
+							irisMaterial.bumpScale = irisBumpScale;
+
+						}
+
+					}
+
+					//
+
+					irisMaterial.dynamicData = iris.dynamicData;
+
+					// --------------------------------------------------------------
+
+					var matListEntry =
+					{
+						"head"		: skinMaterial,
+						"iris"		: irisMaterial
+
+					};
+
+					headMaterials[ i ] = matListEntry;
+					irisMaterials[ i ] = irisMaterial;
+
+				}
+
+				//
+
+				var initMaterialIris = irisMaterials[ 0 ];
+
+				var irisMap = getMaterialTexture( initMaterialIris );
+
+				var irisType = getTextureType( irisMap );
+
+				head[ "currentIrisTextureType" ] = irisType;
+				head[ "currentDynamicData" ] = initMaterialIris.dynamicData;
+
+				// right
+
+				var eyesInnerRight = new XG.Mesh( innerCurvedGeometry, initMaterialIris );
+				eyesInnerRight.castShadow = true;
+				eyesInnerRight.receiveShadow = true;
+
+				eyesInnerRight.scale.multiplyScalar( eyeScale );
+				eyesInnerRight.rotation.set( eyesInnerRightRot[0], eyesInnerRightRot[1], eyesInnerRightRot[2] );
+
+				// left
+
+				var eyesInnerLeft = new XG.Mesh( innerCurvedGeometry, initMaterialIris );
+				eyesInnerLeft.castShadow = true;
+				eyesInnerLeft.receiveShadow = true;
+
+				eyesInnerLeft.scale.multiplyScalar( eyeScale );
+				eyesInnerLeft.rotation.set( eyesInnerLeftRot[0], eyesInnerLeftRot[1], eyesInnerLeftRot[2] );
+
+				// eye pupils
+
+				var pupilDebug = false;
+
+				if ( pupilDebug ) {
+
+					var pupilGeometry = new XG.SphereGeometry( 0.0125, 32, 16 );
+					var pupilMaterial = new XG.EmissiveMaterial( { color: 0xff0000 } );
+					var pupilUpMaterial = new XG.EmissiveMaterial( { color: 0xffaa00 } );
+					var pupilSideMaterial = new XG.EmissiveMaterial( { color: 0x00aaff } );
+					var lensMaterial = new XG.EmissiveMaterial( { color: 0x0000ff } );
+					var hitMaterial = new XG.EmissiveMaterial( { color: 0x00ff00 } );
+
+					var eyesRightPupil = new XG.Mesh( pupilGeometry, pupilMaterial );
+					var eyesLeftPupil = new XG.Mesh( pupilGeometry, pupilMaterial );
+
+					var eyesRightPupilUp = new XG.Mesh( pupilGeometry, pupilUpMaterial );
+					var eyesLeftPupilUp = new XG.Mesh( pupilGeometry, pupilUpMaterial );
+
+					var eyesRightPupilSide = new XG.Mesh( pupilGeometry, pupilSideMaterial );
+					var eyesLeftPupilSide = new XG.Mesh( pupilGeometry, pupilSideMaterial );
+
+					var eyesRightLens = new XG.Mesh( pupilGeometry, lensMaterial );
+					var eyesLeftLens = new XG.Mesh( pupilGeometry, lensMaterial );
+
+					var eyesRightHit = new XG.Mesh( pupilGeometry, hitMaterial );
+					var eyesLeftHit = new XG.Mesh( pupilGeometry, hitMaterial );
+
+					eyesRightHit.scale.multiplyScalar( eyeScale );
+					eyesLeftHit.scale.multiplyScalar( eyeScale );
+
+				} else {
+
+					var eyesRightPupil = new XG.Node();
+					var eyesLeftPupil = new XG.Node();
+
+					var eyesRightPupilUp = new XG.Node();
+					var eyesLeftPupilUp = new XG.Node();
+
+					var eyesRightPupilSide = new XG.Node();
+					var eyesLeftPupilSide = new XG.Node();
+
+					var eyesRightLens = new XG.Node();
+					var eyesLeftLens = new XG.Node();
+
+					var eyesRightHit = new XG.Node();
+					var eyesLeftHit = new XG.Node();
+
+				}
+
+				//
+
+				var pd = -0.14;
+
+				eyesRightLens.position.z = pd;
+				eyesLeftLens.position.z = pd;
+
+				//
+
+				var pd = -0.12;
+				var pp = 0.055;
+
+				eyesRightPupil.position.z = pd;
+				eyesLeftPupil.position.z = pd;
+
+				//
+
+				eyesRightPupilUp.position.z = pd;
+				eyesLeftPupilUp.position.z = pd;
+
+				eyesRightPupilUp.position.y = pp;
+				eyesLeftPupilUp.position.y = pp;
+
+				//
+
+				eyesRightPupilSide.position.z = pd;
+				eyesLeftPupilSide.position.z = pd;
+
+				eyesRightPupilSide.position.x = pp;
+				eyesLeftPupilSide.position.x = pp;
+
+				//
+
+				//eyesRightHit.position.z = pd;
+				//eyesLeftHit.position.z = pd;
+
+				//eyesRightHit.position.x = 0.5 * pp;
+				//eyesLeftHit.position.x = 0.5 * pp;
+
+				// outer eyes
+
+				var eyesOuterLeft = new XG.Mesh( outerGeometry, commonObjects[ "eyesOuterMaterial" ] );
+				eyesOuterLeft.castShadow = true;
+				eyesOuterLeft.receiveShadow = true;
+
+				eyesOuterLeft.scale.multiplyScalar( eyeScale );
+				eyesOuterLeft.rotation.copy( eyesInnerLeft.rotation );
+				eyesOuterLeft.position.z = 2;
+
+				//
+
+				var eyesOuterRight = new XG.Mesh( outerGeometry, commonObjects[ "eyesOuterMaterial" ] );
+				eyesOuterRight.castShadow = true;
+				eyesOuterRight.receiveShadow = true;
+
+				eyesOuterRight.scale.multiplyScalar( eyeScale );
+				eyesOuterRight.rotation.copy( eyesInnerRight.rotation );
+				eyesOuterRight.position.z = 2;
+
+				//
+
+				if ( id !== currentHead ) {
+
+					eyesInnerRight.visible = false;
+					eyesInnerLeft.visible = false;
+					eyesOuterLeft.visible = false;
+					eyesOuterRight.visible = false;
+
+					eyesLeftPupil.visible = false;
+					eyesRightPupil.visible = false;
+
+					eyesLeftPupilUp.visible = false;
+					eyesRightPupilUp.visible = false;
+
+					eyesLeftPupilSide.visible = false;
+					eyesRightPupilSide.visible = false;
+
+					eyesLeftLens.visible = false;
+					eyesRightLens.visible = false;
+
+					//eyesLeftHit.visible = false;
+					//eyesRightHit.visible = false;
+
+				}
+
+				rightGyro.add( eyesInnerRight );
+				leftGyro.add( eyesInnerLeft );
+
+				leftGyro.add( eyesOuterLeft );
+				rightGyro.add( eyesOuterRight );
+
+				//
+
+				eyesInnerLeft.add( eyesLeftPupil );
+				eyesInnerRight.add( eyesRightPupil );
+
+				eyesInnerLeft.add( eyesLeftPupilUp );
+				eyesInnerRight.add( eyesRightPupilUp );
+
+				eyesInnerLeft.add( eyesLeftPupilSide );
+				eyesInnerRight.add( eyesRightPupilSide );
+
+				eyesInnerLeft.add( eyesLeftLens );
+				eyesInnerRight.add( eyesRightLens );
+
+				//eyesInnerLeft.add( eyesLeftHit );
+				//eyesInnerRight.add( eyesRightHit );
+
+				scene.add( eyesLeftHit );
+				scene.add( eyesRightHit );
+
+				//
+
+				meshes[ "leftEye" ] = eyesInnerLeft;
+				meshes[ "rightEye" ] = eyesInnerRight;
+
+				//
+
+				meshes[ "leftPupil" ] = eyesLeftPupil;
+				meshes[ "rightPupil" ] = eyesRightPupil;
+				meshes[ "leftPupilUp" ] = eyesLeftPupilUp;
+				meshes[ "rightPupilUp" ] = eyesRightPupilUp;
+				meshes[ "leftPupilSide" ] = eyesLeftPupilSide;
+				meshes[ "rightPupilSide" ] = eyesRightPupilSide;
+				meshes[ "leftLens" ] = eyesLeftLens;
+				meshes[ "rightLens" ] = eyesRightLens;
+				meshes[ "leftHit" ] = eyesLeftHit;
+				meshes[ "rightHit" ] = eyesRightHit;
+
+				head[ "headMaterials" ] = headMaterials;
+
+			}
+
+			// --------------------------------------------------------------
+
+			function createScene2( id, geometry, scale ) {
+
+				var head = configHeads[ id ];
+				var rootOffset = head[ "rootOffset" ];
+				var meshOffset = head[ "meshOffset" ];
+				var diffuseTex = head[ "diffuseTex" ];
+				var bumpTex    = head[ "bumpTex" ];
+				var glossTex   = head[ "glossTex" ];
+
+				// HEAD
+
+				var skinMaterial = new XG.PhongMaterial( {
+
+					"color"		: 0xffffff,
+					"specular"	: 0x2b2b2b,
+					"shininess"	: 1.2,
+					"map"		: diffuseTex,
+					"glossMap"	: glossTex,
+					"bumpMap"	: bumpTex,
+					"bumpScale"	: 0.7,
+					"wrapAround": true
+
+				} );
+
+				skinMaterial.bumpDetailMap = commonObjects[ "detailMap" ];
+				skinMaterial.detailScale = 0.95;
+				skinMaterial.detailRepeat.multiplyScalar( 64 );
+
+				/*
+				skinMaterial.bumpDetailMap = XG.ImageUtils.loadTexture( "models/ctm/emily/00_displacement_micro.png" );
+				skinMaterial.detailScale = 0.5;
+				*/
+
+				skinMaterial.wrapRGB.set( 0.75, 0.5, 0.5 ).multiplyScalar( 0.9 );
+
+				//
+
+				var root = new XG.Node();
+				root.position.set( rootOffset[ 0 ], rootOffset[ 1 ], rootOffset[ 2 ] );
+				root.rotation.z = -0.05;
+
+				var headMesh = new XG.Mesh( geometry, skinMaterial );
+				headMesh.position.set( meshOffset[ 0 ], meshOffset[ 1 ], meshOffset[ 2 ] );
+				headMesh.scale.multiplyScalar( scale );
+
+				headMesh.castShadow = true;
+				headMesh.receiveShadow = true;
+
+				//
+
+				if ( id !== currentHead ) {
+
+					headMesh.visible = false;
+					mouthMesh.visible = false;
+
+				}
+
+				root.add( headMesh );
+				scene.add( root );
+
+				//
+
+				head[ "meshes" ][ "head" ] = headMesh;
+				head[ "root" ] = root;
+
+				//
+
+				loadCallbackEmily();
+				headLoadedCallback();
+
+			}
+
+			// --------------------------------------------------------------
+
+			function toggleUltra() {
+
+				if ( !isUltra ) {
+
+					renderer.setScale( 1.0 );
+					renderer.dofLensBlurScale = 8;
+					isUltra = true;
+
+				} else {
+
+					renderer.setScale( SCALE );
+					renderer.dofLensBlurScale = 12;
+					isUltra = false;
+
+				}
+
+				refreshDebug();
+
+			}
+
+			function toggleColorCorrection() {
+
+				effectColorCorrection.enabled = !effectColorCorrection.enabled;
+
+			}
+
+			function getTextureType( texture ) {
+
+				return texture.image ? ( texture.image.tagName ? texture.image.tagName.toUpperCase() : "IMG" ) : "SHADER";
+
+			}
+
+			function getMaterialTexture( material ) {
+
+				return material.map ? material.map : material.specularMap;
+
+			}
+
+			function toggleEyeMode() {
+
+				var head = configHeads[ currentHead ];
+				head[ "eyeFollow" ] = ! head[ "eyeFollow" ];
+
+			}
+
+			function toggleHelp() {
+
+				helpVisible = !helpVisible;
+
+				if ( helpVisible ) {
+
+					elHelp.style.top = Math.floor( ( HEIGHT - 300 ) * 0.5 ) + 'px';
+					elHelp.style.display = "block";
+
+				} else {
+
+					elHelp.style.display = "none";
+
+				}
+
+			}
+
+			function refreshDebug() {
+
+				var extraStr = "";
+
+				if ( gpuData ) {
+
+					extraStr += "<br/><br/>GPU: " + gpuData.fullName;
+					extraStr += "<br/>GPU score: " + gpuData.formattedScore;
+
+				} else {
+
+					extraStr += "<br/><br/>GPU: " + "unknown";
+
+				}
+
+				extraStr += "<br/><br/>ultra: " + isUltra;
+
+				elDebug.innerHTML = debugStr + extraStr;
+
+			}
+
+			function toggleDebug() {
+
+				debugVisible = !debugVisible;
+
+				if ( debugVisible ) {
+
+					elDebug.style.display = "block";
+
+				} else {
+
+					elDebug.style.display = "none";
+
+				}
+
+			}
+
+			function handleEscape() {
+
+				if ( helpVisible ) {
+
+					elHelp.style.display = "none";
+					helpVisible = false;
+
+				}
+
+			}
+
+			// --------------------------------------------------------------
+
+			function onWindowResize( event ) {
+
+				var isFullscreen = isDocumentInFullScreenMode();
+
+				if ( isFullscreen ) {
+
+					//MARGIN = 0;
+
+				} else {
+
+					//MARGIN = 61;
+
+				}
+
+				SIDE_MARGIN = 0;
+				//if ( window.innerWidth > IMG_WIDTH ) SIDE_MARGIN = ( window.innerWidth - IMG_WIDTH ) * 0.5;
+
+				WIDTH = window.innerWidth - 2 * SIDE_MARGIN;
+				HEIGHT = window.innerHeight - 2 * MARGIN;
+
+				renderer.setSize( WIDTH, HEIGHT );
+
+				camera.aspect = WIDTH / HEIGHT;
+				camera.updateProjectionMatrix();
+
+				renderer.domElement.style.left = SIDE_MARGIN + "px";
+
+				elHelp.style.top = Math.floor( ( HEIGHT - 300 ) * 0.5 ) + 'px';
+
+			}
+
+			function onDocumentMouseMove( event ) {
+
+				mouseX = ( event.clientX - windowHalfX ) * 0.7;
+				mouseY = ( event.clientY - windowHalfY ) * 0.5;
+
+			}
+
+			function areMaterialsSameType ( materialA, materialB ) {
+
+				var aE = materialA instanceof XG.EmissiveMaterial;
+				var bE = materialB instanceof XG.EmissiveMaterial;
+
+				return ( aE && bE ) || ( !aE && ! bE );
+
+			}
+
+			function onClick( event ) {
+
+				randomizeLights();
+
+			}
+
+			function addBackground() {
+
+				var backgroundMatGray = new XG.PhongMaterial( { color: 0x222222, shininess: 0 } );
+				backgroundMatGray.side = XG.BackSide;
+				backgroundMatGray.color.setHSV( 0.1, 0.1, 0.3 );
+
+				var planeGeo = new XG.PlaneGeometry( 300, 1000 );
+
+				// back full
+
+				backFull = new XG.Mesh( planeGeo, backgroundMatGray );
+				backFull.rotation.x = Math.PI;
+				backFull.position.z = -350;
+				backFull.position.x = 0;
+				backFull.scale.x = 10;
+				scene.add( backFull );
+
+				backFull.visible = true;
+
+			}
+
+			// --------------------------------------------------------------
+
+			function onDocumentKeyDown( event ) {
+
+				switch ( event.keyCode ) {
+
+					case 71: /*G*/	toggleFullscreen(); break;
+					case 85: /*U*/	if ( !event.ctrlKey ) toggleUltra(); break;
+					case 67: /*C*/	toggleColorCorrection(); break;
+
+					case 82: /*R*/ 	if ( !event.ctrlKey ) randomizeLights(); break;
+					case 77: /*P*/	toggleEyeMode(); break;
+					case 90: /*Z*/	toggleZoom(); break;
+
+					case 72: /*H*/	toggleHelp(); break;
+					case 68: /*D*/	toggleDebug(); break;
+
+					case 27: /*ESC*/ handleEscape(); break;
+
+				}
+
+			}
+
+			// --------------------------------------------------------------
+
+			function computeLightAmount( light, object ) {
+
+				var lightAmount = light.intensity * 1 / object.position.distanceToSquared( light.position );
+				return lightAmount;
+
+			}
+
+			function axisProjection( origin, unitPoint, point ) {
+
+				originToPoint.sub( point, origin );
+				unitAxisVector.sub( unitPoint, origin );
+
+				var p1 = unitAxisVector.dot( unitAxisVector );
+				var p2 = unitAxisVector.dot( originToPoint );
+
+				var t = p2 / p1;
+
+				return t;
+
+			}
+
+			function updateDynamicEyeTexture( head, meshes ) {
+
+				if ( head[ "currentDynamicData" ] ) {
+
+					diffuseUniforms[ "diffuseSource" ].value = commonObjects[ head[ "currentDynamicData" ].map ];
+
+				} else {
+
+					diffuseUniforms[ "diffuseSource" ].value = commonObjects[ "blackMap" ];
+
+				}
+
+				var causticBrightness = head[ "currentDynamicData" ].causticBrightness;
+
+				var leftEye = meshes[ "leftEye" ];
+				var rightEye = meshes[ "rightEye" ];
+
+				var leftPupil = meshes[ "leftPupil" ];
+				var rightPupil = meshes[ "rightPupil" ];
+
+				var leftPupilUp = meshes[ "leftPupilUp" ];
+				var rightPupilUp = meshes[ "rightPupilUp" ];
+
+				var leftPupilSide = meshes[ "leftPupilSide" ];
+				var rightPupilSide = meshes[ "rightPupilSide" ];
+
+				var leftLens = meshes[ "leftLens" ];
+				var rightLens = meshes[ "rightLens" ];
+
+				var leftHit = meshes[ "leftHit" ];
+				var rightHit = meshes[ "rightHit" ];
+
+				//
+
+				scene.updateMatrixWorld();
+
+				leftPupilPosition.copy( leftPupil.matrixWorld.getPosition() );
+				rightPupilPosition.copy( rightPupil.matrixWorld.getPosition() );
+
+				leftPupilUpPosition.copy( leftPupilUp.matrixWorld.getPosition() );
+				rightPupilUpPosition.copy( rightPupilUp.matrixWorld.getPosition() );
+
+				leftPupilSidePosition.copy( leftPupilSide.matrixWorld.getPosition() );
+				rightPupilSidePosition.copy( rightPupilSide.matrixWorld.getPosition() );
+
+				leftLensPosition.copy( leftLens.matrixWorld.getPosition() );
+				rightLensPosition.copy( rightLens.matrixWorld.getPosition() );
+
+				keyLightPosition.copy( keyLight.matrixWorld.getPosition() );
+				fillLightPosition.copy( fillLight.matrixWorld.getPosition() );
+				fillLight2Position.copy( fillLight2.matrixWorld.getPosition() );
+
+				//
+
+				leftPlane.setFromCoplanarPoints( leftPupilPosition, leftPupilUpPosition, leftPupilSidePosition );
+				rightPlane.setFromCoplanarPoints( rightPupilPosition, rightPupilUpPosition, rightPupilSidePosition );
+
+				leftPlane.intersectLine( keyLightPosition, leftLensPosition, leftHitPosition );
+				rightPlane.intersectLine( keyLightPosition, rightLensPosition, rightHitPosition );
+
+				leftHit.position.copy( leftHitPosition );
+				rightHit.position.copy( rightHitPosition );
+
+				//
+
+				var cy = axisProjection( leftPupilPosition, leftPupilSidePosition, leftHitPosition );
+				var cx = -axisProjection( leftPupilPosition, leftPupilUpPosition, leftHitPosition );
+
+				cx *= 54;
+				cy *= 54;
+
+				//
+
+				leftPlane.intersectLine( fillLightPosition, leftLensPosition, leftHitPosition );
+				rightPlane.intersectLine( fillLightPosition, rightLensPosition, rightHitPosition );
+
+				leftHit.position.copy( leftHitPosition );
+				rightHit.position.copy( rightHitPosition );
+
+				var cy2 = axisProjection( leftPupilPosition, leftPupilSidePosition, leftHitPosition );
+				var cx2 = -axisProjection( leftPupilPosition, leftPupilUpPosition, leftHitPosition );
+
+				cx2 *= 54;
+				cy2 *= 54;
+
+				//
+
+				leftPlane.intersectLine( fillLight2Position, leftLensPosition, leftHitPosition );
+				rightPlane.intersectLine( fillLight2Position, rightLensPosition, rightHitPosition );
+
+				leftHit.position.copy( leftHitPosition );
+				rightHit.position.copy( rightHitPosition );
+
+				var cy3 = axisProjection( leftPupilPosition, leftPupilSidePosition, leftHitPosition );
+				var cx3 = -axisProjection( leftPupilPosition, leftPupilUpPosition, leftHitPosition );
+
+				cx3 *= 54;
+				cy3 *= 54;
+
+				//
+
+				var leftEyeLight = computeLightAmount( keyLight, leftPupil ) + computeLightAmount( backLight, leftPupil ) + computeLightAmount( fillLight, leftPupil ) + computeLightAmount( fillLight2, leftPupil );
+				var rightEyeLight = computeLightAmount( keyLight, rightPupil ) + computeLightAmount( backLight, rightPupil ) + computeLightAmount( fillLight, rightPupil ) + computeLightAmount( fillLight2, rightPupil );
+
+				var pupilData = head[ "currentDynamicData" ];
+				var lightAmountScale = 25000000 * 0.2;
+				var pupilMaxSize = pupilData.pupilMaxSize;
+				var pupilSize = pupilMaxSize - Math.max( leftEyeLight, rightEyeLight ) * lightAmountScale;
+
+				var dilationSpeed = 0.025;
+				var contractionSpeed = 0.5;
+				var pupilDiff = pupilSize - pupilData.pupilSize;
+				var pupilChangeSpeed = pupilDiff > 0 ? dilationSpeed : contractionSpeed;
+
+				pupilData.pupilSize += pupilChangeSpeed * pupilDiff;
+
+				diffuseUniforms[ "level" ].value = pupilData.pupilSize;
+				diffuseUniforms[ "irisSaturation" ].value  = pupilData.irisSaturation;
+				diffuseUniforms[ "irisBrightness" ].value  = pupilData.irisBrightness;
+				diffuseUniforms[ "scleraBrightness" ].value  = pupilData.scleraBrightness;
+
+				diffuseUniforms[ "causticCenter" ].value.set( cx, cy );
+				diffuseUniforms[ "causticBrightness" ].value = causticBrightness * keyLight.intensity;
+
+				diffuseUniforms[ "causticCenter2" ].value.set( cx2, cy2 );
+				diffuseUniforms[ "causticBrightness2" ].value = causticBrightness * fillLight.intensity;
+
+				diffuseUniforms[ "causticCenter3" ].value.set( cx3, cy3 );
+				diffuseUniforms[ "causticBrightness3" ].value = causticBrightness * fillLight2.intensity;
+
+				diffuseComposer.render( 0.1 );
+
+			}
+
+			// --------------------------------------------------------------
+
+			function updateEyeRig( head, meshes, delta ) {
+
+				var leftEye = meshes[ "leftEye" ];
+				var rightEye = meshes[ "rightEye" ];
+				var leftEyeOverlay = meshes[ "leftEyeOverlay" ];
+				var rightEyeOverlay = meshes[ "rightEyeOverlay" ];
+
+				var eyeBehaviorType = head[ "eyeBehaviorType" ];
+
+				if ( eyeBehaviorType === 1 ) {
+
+					if ( head[ "eyeBehaviorCountDown" ] <= 0 ) {
+
+						head[ "eyeFollow" ] = !head[ "eyeFollow" ];
+						head[ "eyeBehaviorCountDown" ] = XG.Math.randomFloat( 1, 5 );
+
+					}
+
+					head[ "eyeBehaviorCountDown" ] -= delta;
+
+				}
+
+				if ( head[ "eyeFollow" ] ) {
+
+					//eyeX = - ( mouseX ) * 3.0 - 300;
+					//eyeY = ( mouseY ) * 3.0 - 300;
+					
+					//mouseX = ( event.clientX - windowHalfX ) * 0.7;
+					//mouseY = ( event.clientY - windowHalfY ) * 0.5;
+					
+					var newX = (xxx-0.5)*window.innerWidth * -1;
+					var newY = (yyy-0.5)*window.innerHeight * 1;
+					
+					if ( xxx != 1  && yyy != 1 ) {
+					eyeX = - ( newX ) * 3.0 - 300;
+					eyeY = ( newY ) * 1.5 - 400;
+					} else {
+					eyeX = -200;
+					eyeY = -310;
+					}
+					
+				} else {
+					eyeX = -200;
+					eyeY = -310;
+				}
+
+				var d = 0.3;
+
+				eyeTarget.x += d * ( eyeX - eyeTarget.x );
+				eyeTarget.y += d * ( eyeY - eyeTarget.y );
+				eyeTarget.z = -3500;
+
+				leftEye.lookAt( eyeTarget );
+				rightEye.lookAt( eyeTarget );
+
+			}
+
+			// --------------------------------------------------------------
+
+			function setLights( angleDiff ) {
+
+				var angle1 = lightAngles[ lightIndex ] * 5;
+				keyLightRig.rotation.y = angle1;
+
+				keyLight.forwardShadowSide = shadowSides[ lightIndex ];
+
+				//
+
+				var angle2 = angle1 + Math.PI * angleDiff;
+				fillLightRig.rotation.y = angle2;
+
+			}
+
+			function randomizeLights() {
+
+				var oldIndex = lightIndex;
+
+				do {
+
+					lightIndex = XG.Math.randomInt( 0, lightAngles.length - 1 );
+
+				} while ( lightIndex == oldIndex );
+
+
+				var angleDiff = 0.25;
+				if ( Math.random() < 0.5 ) angleDiff = 0.95;
+
+				setLights( angleDiff );
+
+				keyLightRig.rotation.x = XG.Math.randomInt( -7, 7 ) * 0.1;
+				fillLightRig.rotation.x = -keyLightRig.rotation.x;
+
+				backLight.intensity = XG.Math.randomFloat( 0, 2 );
+				fillLight2.intensity = XG.Math.randomFloat( 0, 1.75 );
+
+			}
+
+			// --------------------------------------------------------------
+
+			function animate() {
+
+				requestAnimationFrame( animate );
+
+				render();
+				if ( statsEnabled ) stats.update();
+
+			}
+
+			function render() {
+
+				var time = Date.now();
+				var delta = clock.getDelta();
+
+				//targetX = mouseX * .0001;
+				//targetY = ( mouseY + -10 ) * .0001;
+				
+				targetX =  ((xxx-0.5)*window.innerWidth * -1) * .0002;
+				targetY =  ((yyy-0.5)*window.innerHeight * 1) * .0002;
+				
+				
+				for ( var i = 0, il = headList.length; i < il; i ++ ) {
+
+					var head = headList[ i ];
+					var root = head[ "root" ];
+
+					if ( root ) {
+
+						root.rotation.y += 0.05 * ( targetX - root.rotation.y );
+						root.rotation.x += 0.05 * ( targetY - root.rotation.x );
+
+					}
+
+				}
+
+				//
+
+				var head = configHeads[ currentHead ];
+				var meshes = head[ "meshes" ];
+				var currentIrisType = head[ "currentIrisTextureType" ];
+
+
+				if ( eyeRigEnabled && head[ "loaded" ] ) {
+
+					updateEyeRig( head, meshes, delta );
+
+				}
+
+				if ( useShaderTextures && currentIrisType === "SHADER" && meshes[ "leftEye" ] ) {
+
+					updateDynamicEyeTexture( head, meshes );
+
+				}
+
+				// render the scene
+
+				renderer.render( scene, camera );
+
+			}
+
+			//
+
+			init();
+			animate();
+			////////////
+			toggleEyeMode(); 
+			randomizeLights(); 
+}
+		</script>
+
+</body>
+</html>

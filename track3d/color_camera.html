@@ -1,0 +1,70 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>tracking.js - color with camera</title>
+  <link rel="stylesheet" href="assets/demo.css">
+
+  <script src="js/tracking-min.js"></script>
+  <script src="assets/stats.min.js"></script>
+  <script src="assets/color_camera_gui.js"></script>
+
+  <style>
+  video, canvas {
+    position: absolute;
+  }
+  </style>
+</head>
+<body>
+
+
+      <video id="video" width="320" height="240" preload autoplay loop muted controls></video>
+      <canvas id="canvas" width="320" height="240"></canvas>
+
+
+
+  <script>
+    window.onload = function() {
+      var video = document.getElementById('video');
+      var canvas = document.getElementById('canvas');
+      var context = canvas.getContext('2d');
+
+      //var tracker = new tracking.ColorTracker();
+	
+	
+	var colors = new tracking.ColorTracker(['yellow']);
+	
+	
+      tracking.track('#video', colors, { camera: true });
+
+      colors.on('track', function(event) {
+	  
+	  //console.log(event.data[0]);
+        context.clearRect(0, 0, canvas.width, canvas.height);
+
+        //event.data.forEach(function(rect) {
+		if (event.data.length != 0) {
+		var rect = event.data[0];
+		console.log(rect)
+		
+          if (rect.color === 'custom') {
+            rect.color = colors.customColor;
+          }
+
+          context.strokeStyle = rect.color;
+          context.strokeRect(rect.x, rect.y, rect.width, rect.height);
+          context.font = '11px Helvetica';
+          context.fillStyle = "#fff";
+          context.fillText('x: ' + rect.x + 'px', rect.x + rect.width + 5, rect.y + 11);
+          context.fillText('y: ' + rect.y + 'px', rect.x + rect.width + 5, rect.y + 22);
+        
+		//}); //end foreach
+		}
+      });
+
+     //initGUIControllers(tracker);
+    };
+  </script>
+
+</body>
+</html>
