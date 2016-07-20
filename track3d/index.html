@@ -7,6 +7,7 @@
 		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
 		  <link rel="stylesheet" href="assets/demo.css">
 		  <script src="js/tracking-min.js"></script>
+		  <script src="js/mic.js"></script>
 		  <script src="js/data/face-min.js"></script>
 		  <script src="assets/stats.min.js"></script>
 		  <script src="assets/color_camera_gui.js"></script>
@@ -166,6 +167,7 @@
 	</head>
 
 	<body>
+	<canvas id="meter" width="500" height="20" style="background: grey; z-index:999;"></canvas>
 		<div id="loadingEmily" class="loading">LOADING <span class="one">.</span><span class="two">.</span><span class="three">.</span></div>
 
 		<div id="debugOuter">
@@ -196,6 +198,47 @@
 		var xxx = 1;
 		var yyy = 1;
     window.onload = function() {
+	
+	//window.onload = function() {
+
+    // grab our canvas
+	canvasContext = document.getElementById( "meter" ).getContext("2d");
+	
+    // monkeypatch Web Audio
+    window.AudioContext = window.AudioContext || window.webkitAudioContext;
+	
+    // grab an audio context
+    audioContext = new AudioContext();
+
+    // Attempt to get audio input
+    try {
+        // monkeypatch getUserMedia
+        navigator.getUserMedia = 
+        	navigator.getUserMedia ||
+        	navigator.webkitGetUserMedia ||
+        	navigator.mozGetUserMedia;
+
+        // ask for an audio input
+        navigator.getUserMedia(
+        {
+            "audio": {
+                "mandatory": {
+                    "googEchoCancellation": "false",
+                    "googAutoGainControl": "false",
+                    "googNoiseSuppression": "false",
+                    "googHighpassFilter": "false"
+                },
+                "optional": []
+            },
+        }, gotStream, didntGetStream);
+    } catch (e) {
+        alert('getUserMedia threw exception :' + e);
+    }
+
+
+	
+	
+	
       var video = document.getElementById('video');
       var canvas = document.getElementById('canvas');
       var context = canvas.getContext('2d');
@@ -2143,6 +2186,11 @@
 
 				var time = Date.now();
 				var delta = clock.getDelta();
+				
+				console.log(mainsound);
+				if(mainsound == 1) {
+					randomizeLights();
+				}
 
 				//targetX = mouseX * .0001;
 				//targetY = ( mouseY + -10 ) * .0001;
