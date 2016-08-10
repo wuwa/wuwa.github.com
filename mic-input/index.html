@@ -1,0 +1,118 @@
+<!doctype html>
+<html>
+	<head>
+		<title>Volume Meter Sample</title>
+		<style>
+		body, html{
+		margin:0;
+		width:  100%;
+		height: 100%;
+		overflow: hidden;
+		background: #222;
+		}
+		</style>
+		<!-- Include the volume meter component -->
+		<script src="volume.js"></script>
+	</head>
+	<body>
+
+		<canvas id="meter" width="500" height="50"></canvas>
+
+
+
+
+<script>
+
+
+var audioContext = null;
+var meter = null;
+var canvasContext = null;
+var WIDTH=window.innerWidth;
+var HEIGHT=window.innerHeight;
+var rafID = null;
+
+var clipLevel = 0.8;
+var averaging = 0.98;
+var clipLag = 100;
+
+
+window.onload = function() {
+
+    // grab our canvas
+	canvasContext = document.getElementById( "meter" ).getContext("2d");
+	canvasContext.canvas.width  = window.innerWidth;
+	canvasContext.canvas.height = window.innerHeight;
+    // monkeypatch Web Audio
+    window.AudioContext = window.AudioContext || window.webkitAudioContext;
+	
+    // grab an audio context
+    audioContext = new AudioContext();
+
+    // Attempt to get audio input
+    try {
+        // monkeypatch getUserMedia
+        navigator.getUserMedia = 
+        	navigator.getUserMedia ||
+        	navigator.webkitGetUserMedia ||
+        	navigator.mozGetUserMedia;
+
+        // ask for an audio input
+        navigator.getUserMedia(
+        {
+            "audio": {
+                "mandatory": {
+                    "googEchoCancellation": "false",
+                    "googAutoGainControl": "false",
+                    "googNoiseSuppression": "false",
+                    "googHighpassFilter": "false"
+                },
+                "optional": []
+            },
+        }, gotStream, didntGetStream);
+    } catch (e) {
+        alert('getUserMedia threw exception :' + e);
+    }
+
+}
+
+
+function didntGetStream() {
+    alert('Stream generation failed.');
+}
+
+var mediaStreamSource = null;
+
+function gotStream(stream) {
+    // Create an AudioNode from the stream.
+    mediaStreamSource = audioContext.createMediaStreamSource(stream);
+
+    // Create a new volume meter and connect it.
+    meter = createAudioMeter(audioContext,clipLevel,averaging,clipLag);
+	
+    mediaStreamSource.connect(meter);
+
+    // kick off the visual updating
+    drawLoop();
+}
+
+function drawLoop( time ) {
+    // clear the background
+    canvasContext.clearRect(0,0,WIDTH,HEIGHT);
+
+    // check if we're currently clipping
+    if (meter.checkClipping())
+        canvasContext.fillStyle = "red";
+    else
+        canvasContext.fillStyle = "green";
+
+    // draw a bar based on the current volume
+    canvasContext.fillRect(0, 0, meter.volume*WIDTH*1.4, HEIGHT);
+
+    // set up the next visual callback
+    rafID = window.requestAnimationFrame( drawLoop );
+}
+
+</script>
+
+	</body>
+</html>
