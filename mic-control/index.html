@@ -1,0 +1,203 @@
+<!doctype html>
+<html>
+	<head>
+		<title>gif volume</title>
+		<style>
+		body, html{
+		margin:0;
+		width:  100%;
+		height: 100%;
+		overflow: hidden;
+		background: #222;
+		}
+		#meter {
+		position: fixed;
+		bottom:0;
+		left: 0;
+		}
+		canvas{
+			   /* -webkit-filter: brightness(2.4) contrast(1.5);*/
+		}
+		</style>
+		<script type="text/javascript" src="./libgif.js"></script>
+		<script type="text/javascript" src="./rubbable.js"></script>
+		<script src="volume.js"></script>
+	</head>
+	<body>
+		<center>
+		<br><br><br><br>
+		<img id="example1" src="./example_gifs/rub_test_preview.jpg" rel:animated_src="./gif.gif" rel:auto_play="0" width="500" height="500" />
+		</center>
+		<canvas id="meter" width="500" height="50"></canvas>
+
+
+
+
+<script>
+
+var sup1 = new SuperGif({ gif: document.getElementById('example1') } );
+				var frames;
+				sup1.load(init);
+				
+				var direction = 1;
+				var timer;
+				var rate = 30;
+				
+				function init() {
+				frames = sup1.get_length();
+				//alert(frames);
+				go();
+				}
+				
+				function go(){
+				
+				clearTimeout(timer);
+				//console.log(direction);
+				if (direction == 1) {
+				//console.log('for')
+					if(sup1.get_current_frame() >= frames-1){
+					sup1.move_to(0);
+					} else {
+					sup1.move_relative(1);
+					}
+				} else {
+				//console.log('rev')
+					if(sup1.get_current_frame() <= 1){
+					sup1.move_to(frames -1);
+					} else {
+					sup1.move_relative(-1);
+					}
+				}
+				
+				timer = setTimeout(go, rate);
+
+				}
+				
+				function back(x){
+				if(x) {rate = x;}
+				clearTimeout(timer);				
+				playback();
+				timer = setTimeout(back, rate, x);
+				}
+
+
+////////////////////////////////////////////////////////////////////////
+
+var audioContext = null;
+var meter = null;
+var canvasContext = null;
+var WIDTH=window.innerWidth;
+var HEIGHT= 50;//window.innerHeight;
+var rafID = null;
+
+var clipLevel = 1;
+var averaging = 0.98;
+var clipLag = 100;
+
+
+window.onload = function() {
+
+    // grab our canvas
+	canvasContext = document.getElementById( "meter" ).getContext("2d");
+	canvasContext.canvas.width  = window.innerWidth;
+	canvasContext.canvas.height = 50;//window.innerHeight;
+    // monkeypatch Web Audio
+    window.AudioContext = window.AudioContext || window.webkitAudioContext;
+	
+    // grab an audio context
+    audioContext = new AudioContext();
+
+    // Attempt to get audio input
+    try {
+        // monkeypatch getUserMedia
+        navigator.getUserMedia = 
+        	navigator.getUserMedia ||
+        	navigator.webkitGetUserMedia ||
+        	navigator.mozGetUserMedia;
+
+        // ask for an audio input
+        navigator.getUserMedia(
+        {
+            "audio": {
+                "mandatory": {
+                    "googEchoCancellation": "false",
+                    "googAutoGainControl": "false",
+                    "googNoiseSuppression": "false",
+                    "googHighpassFilter": "false"
+                },
+                "optional": []
+            },
+        }, gotStream, didntGetStream);
+    } catch (e) {
+        alert('getUserMedia threw exception :' + e);
+    }
+
+}
+
+
+function didntGetStream() {
+    alert('Stream generation failed.');
+}
+
+var mediaStreamSource = null;
+
+function gotStream(stream) {
+    // Create an AudioNode from the stream.
+    mediaStreamSource = audioContext.createMediaStreamSource(stream);
+
+    // Create a new volume meter and connect it.
+    meter = createAudioMeter(audioContext,clipLevel,averaging,clipLag);
+	
+    mediaStreamSource.connect(meter);
+
+    // kick off the visual updating
+    drawLoop();
+}
+
+function soundloop() {
+	
+	//console.log(rate);
+	if(meter.volume <= 0.2){
+		rate = 1550;
+		//sup1.move_to(0);
+	} else {
+		if(meter.volume <= 0.5){
+		rate = (1-meter.volume)*200;
+		direction = Math.round(Math.random());
+		} else {
+		rate = (1-meter.volume)*100;
+		direction = Math.round(Math.random());
+		}
+		console.log(direction);
+		clearTimeout(timer);
+		go();
+		
+	}
+}
+
+var sss = setInterval(soundloop, 100);
+
+
+function drawLoop( time ) {
+
+
+    // clear the background
+    canvasContext.clearRect(0,0,WIDTH,HEIGHT);
+
+    // check if we're currently clipping
+    if (meter.checkClipping())
+        canvasContext.fillStyle = "red";
+    else
+        canvasContext.fillStyle = "green";
+
+    // draw a bar based on the current volume
+    canvasContext.fillRect(0, 0, meter.volume*WIDTH*1, HEIGHT);
+
+    // set up the next visual callback
+    rafID = window.requestAnimationFrame( drawLoop );
+}
+
+</script>
+
+	</body>
+</html>
