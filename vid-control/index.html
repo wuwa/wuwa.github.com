@@ -149,7 +149,7 @@ function soundloop() {
 	//console.log(rate);
 	var bbb = 1;
 	var bright = "blur(0px) saturate("+bbb+")";
-	if(meter.volume <= 0.2){
+	if(meter.volume <= 0.05){
 		
 		vidspeed = 0.3;
 		//sup1.move_to(0);
@@ -157,7 +157,7 @@ function soundloop() {
 		document.getElementsByClassName("vid")[0].style.webkitFilter = bright;
 	} else {
 		direction = -1;
-		if(meter.volume <= 0.5){
+		if(meter.volume <= 0.15){
 		//rate = (1-meter.volume)*200;
 		bbb = 1+ meter.volume*2;
 		bright = "blur(7px) saturate("+bbb+")";
