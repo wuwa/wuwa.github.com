@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en" >
+
+<head>
+  <meta charset="UTF-8">
+  <title>Paper.js </title>
+  
+  
+  
+      <link rel="stylesheet" href="./style.css">
+
+  
+</head>
+
+<body>
+
+  <canvas id="myCanvas" resize></canvas>
+
+<script type="text/paperscript" canvas="myCanvas">// define variables
+///////////////////
+var size = 15; // size of particles
+var scaling = 1.3; // size of clock
+var _amount = 50; // number of particles per digit
+var shuff = 1; // shuffle the particles (0/1)
+var variant = 1; // make some particles bigger (0/1)
+var opac = 1; // make particles have fill or just stroke (0/1)
+var link = 'https://wuwa.github.io/cdn/test.svg';
+
+// define background
+var bg = new Shape.Rectangle(view.bounds);
+bg.fillColor = 'white';
+
+// define 2 buttons: +,-
+project.currentStyle.fillColor = '#333';
+var knob1 = new PointText();
+knob1.content = "+";
+knob1.fontSize = '40px';
+knob1.position = [20, 20];
+var knob2 = knob1.clone();
+knob2.content = "-";
+knob2.position = [50, 20];
+
+// define shapes list for when clicking the numbers
+var shapes = [];
+shapes[0] = new Path.Circle(-100, -100, size / 2);
+shapes[1] = new Path.Rectangle(-100, -100, size, size);
+shapes[2] = new Path.Rectangle(-100, -100, size * 1.5, size / 1.5);
+shapes[3] = new Path.Rectangle(-100, -100, size, size, 5);
+// shapes[4] = new Path.Star(-100,-100, 5, size/2, size);
+
+// define the actions on the buttons
+knob1.onMouseDown = function(e) {
+    for (var k = 19; k > 8; k = k - 2) {
+        var a = project.activeLayer.children[k].children;
+        for (var i = 0; i < a.length; i++) {
+            a[i].scaling += 0.2;
+        }
+    }
+}
+knob2.onMouseDown = function(e) {
+    for (var k = 19; k > 8; k = k - 2) {
+        var a = project.activeLayer.children[k].children;
+        for (var i = 0; i < a.length; i++) {
+            a[i].scaling -= 0.2;
+        }
+    }
+}
+
+
+project.importSVG(link, function(drawing) {
+    // center the svg to the view
+    drawing.scaling = scaling;
+    var w = drawing.children[0].bounds.width + 20;
+    var h = drawing.children[0].bounds.height;
+    var off = 100;
+    drawing.position = view.center - [w * 3 + off / 2, h];
+
+    // make a group of 10 numbers (0-9) invisible
+    var nums = new Group();
+    for (i = 0; i < drawing.children.length; i++) {
+        nums.addChild(drawing.children[i].children[0]);
+    }
+    nums.visible = 0;
+    
+    // main function to make 1 changing digit
+    function makeNum(digit, xpos) {
+        var path = nums.children[0];
+        path.smooth();
+        var amount = _amount;
+        var particles = new Group();
+        var dests = [];
+        var proto = new Path.Circle(-100,-100,size/2);
+        //var proto = new Path.Rectangle(-100, -100, size / 2, size / 2);
+        proto.fillColor = '#111';
+        //proto.strokeColor = '#111';
+        if (opac) {
+            proto.fillColor.alpha = 0.3;
+        }
+        proto.strokeWidth = 1;
+
+        for (i = 0; i < amount; i++) {
+            var c = proto.clone();
+            c.scaling = Math.random() + 0.7;
+            if (variant && Math.random() > 0.2) {
+                c.scaling += Math.random() * 4.5;
+                //c.scaling.y += Math.random() * 5;
+            }
+            c.rotation = Math.random() * 360;
+            particles.addChild(c);
+            var length = path.length;
+            var location = i * (length / amount);
+            c.position = Point.random() * view.size;
+            dests[i] = path.getPointAt(location) + [xpos, 0];
+        }
+        
+        
+        // main function to change the shapes on click
+        function change() {
+            var col = Color.random();
+            // kill all the previous particles and make new empty group
+            particles.children = [];
+            proto = shapes[Math.floor(Math.random() * shapes.length)];
+            proto.strokeColor = col;
+            proto.fillColor = col;
+            proto.fillColor.alpha = 0;
+            
+            // duplicate many particles acording to var amount
+            for (i = 0; i < amount; i++) {
+                var c = proto.clone();
+                c.scaling = Math.random() + 0.7;
+                c.rotation = Math.random() * 360;
+                c.position = Point.random() * view.size;
+                if (opac) {
+                    c.fillColor.alpha = 0;
+                } else {
+                    c.fillColor.alpha = c.strokeColor.alpha = Math.random();
+                }
+                // add onClick function for each particle
+                c.onClick = function(e) {
+                    change();
+                }
+                // add them all to a group
+                particles.addChild(c);
+            }
+        }
+
+        for (x = 0; x < particles.children.length; x++) {
+            particles.children[x].onClick = function(e) {
+                change();
+            }
+        }
+        var slot = 0;
+        var digits = [];
+        var olddigits = [];
+        
+        // main function to run every seconds and change the path
+        function updateTime() {
+            olddigits = digits;
+            digits = startTime();
+
+            if (olddigits[digit] != digits[digit]) {
+                slot++;
+                //path = nums.children[slot % nums.children.length];
+                path = nums.children[parseInt(digits[digit])];
+                var length = path.length;
+                for (i = 0; i < amount; i++) {
+                    var location = i * (length / amount);
+                    //particles.children[i].position = path.getPointAt(location);
+                    dests[i] = path.getPointAt(location) + [xpos, 0];
+                }
+                if (shuff) {
+                    dests = shuffle(dests);
+                }
+            }
+        }
+
+        // onFrame function to run all the time and do the animation
+        proto.onFrame = function(e) {
+            //console.log(digits)
+            for (i = 0; i < amount; i++) {
+                var vector = dests[i] - particles.children[i].position;
+                //console.log(dests[this.id])
+                particles.children[i].position += vector / 10;
+                if (vector.length < 2) {
+                    particles.children[i].position = dests[i];
+                }
+            }
+        }
+        // run the updateTime function every 1000 ms / 1 second
+        setInterval(updateTime, 1000);
+    } //end
+
+    // duplicate 6 digits for the clock (hh mm ss) with the makeNum function
+    for (j = 0; j < 6; j++) {
+        var numoff = off;
+        if (j < 4) {
+            numoff = numoff / 2
+        };
+        if (j < 2) {
+            numoff = 0
+        };
+        makeNum(j, j * w + numoff);
+    }
+
+
+}); //end of SVG function
+
+
+// function to read the clock time and return 6 split digits
+function startTime() {
+    var today = new Date();
+    var h = today.getHours();
+    var m = today.getMinutes();
+    var s = today.getSeconds();
+    // make the text
+    m = checkTime(m);
+    s = checkTime(s);
+    h = checkTime(h);
+    var numstring = h + ":" + m + ":" + s;
+    // cut the numbers to 6 single digits
+    var a1 = numstring.charAt(0);
+    var a2 = numstring.charAt(1);
+    var a3 = numstring.charAt(3);
+    var a4 = numstring.charAt(4);
+    var a5 = numstring.charAt(6);
+    var a6 = numstring.charAt(7);
+    return [a1, a2, a3, a4, a5, a6];
+}
+
+// function to make single numbers to double (9 -> 09 for example)
+function checkTime(i) {
+    // add zero in front of numbers < 10
+    if (i < 10) {
+        i = "0" + i
+    };
+    return i;
+}
+
+// function to mix and shuffle an array of items
+function shuffle(a) {
+    var j, x, i;
+    for (i = a.length; i; i -= 1) {
+        j = Math.floor(Math.random() * i);
+        x = a[i - 1];
+        a[i - 1] = a[j];
+        a[j] = x;
+    }
+    return a;
+}
+
+onMouseMove;
+  </script>
+  <script src='https://cdnjs.cloudflare.com/ajax/libs/paper.js/0.12.2/paper-core.js'></script>
+<script src='https://cdnjs.cloudflare.com/ajax/libs/paper.js/0.12.2/paper-full.js'></script>
+
+  
+
+</body>
+
+</html>
