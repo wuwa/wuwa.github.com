@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<!-- defaults: direction derived per surface, and no blend mode -->
+<html lang="en" class="ink-flip blend-normal">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Unified state layer — Option A (color-mix) vs Option B (background layer)</title>
+<style>
+/* ──────────────────────────────────────────────────────────────────────────
+   THE MECHANISM
+
+   Three theme tokens drive every state on every surface. No per-surface
+   hover or pressed token exists anywhere.
+
+     --state-ink        direction of the layer      (theme-tied)
+     --blend            blend mode for Option B     (theme-tied)
+     --hover-dark   / --pressed-dark    strength for a darkening layer
+     --hover-light  / --pressed-light   strength for a lightening layer
+
+   The strengths are split by ink direction, not by theme, because the two
+   directions are not symmetrical. Display gamma means a translucent light
+   layer adds far less luminance than an equally translucent dark layer
+   removes: 6% black on white drops relative luminance by ~0.13, while 6%
+   white on black raises it by ~0.005 — roughly 25× less. So the lighten
+   direction needs larger numbers to read as the same step.
+
+   Splitting by ink rather than theme matters because direction and theme can
+   come apart: the Flip preset derives direction per surface, so a single
+   page can use both sets at once. --state-hover / --state-pressed are the
+   resolved values, picked per element further down.
+
+   --state is the per-element current strength. Registering it with @property
+   is what lets Option B animate at all: background-image does not
+   interpolate, so transitioning --state itself is the only route.
+   ────────────────────────────────────────────────────────────────────────── */
+@property --state {
+  syntax: '<number>';
+  inherits: false;
+  initial-value: 0;
+}
+
+/* OPTION A — mix the ink into the surface color.
+   color-mix() premultiplies by alpha, so this equals source-over compositing
+   the ink at alpha = --state, including when --surface is `transparent`
+   (ghost), where it emits a bare rgb(ink / state). */
+.state--a {
+  background-color: color-mix(
+    in var(--mix-space),
+    var(--ink) calc(var(--state) * 100%),
+    var(--surface)
+  );
+}
+
+/* OPTION B — composite the ink as an extra background layer.
+   background-color keeps the untouched surface token. The blend is between
+   this element's own background layers, so it needs no `isolation` and
+   leaks nothing into ancestors. */
+.state--b {
+  background-color: var(--surface);
+  background-image: linear-gradient(rgb(from var(--ink) r g b / var(--state)) 0 0);
+  background-blend-mode: var(--blend);
+}
+
+/* the only two rules in the system that name a pseudo-class */
+.state:hover  { --state: var(--state-hover); }
+.state:active { --state: var(--state-pressed); }
+/* forced equivalents, so the states are visible without a pointer */
+.is-hover     { --state: var(--state-hover); }
+.is-pressed   { --state: var(--state-pressed); }
+
+/* ───────────────────────────── theme ───────────────────────────── */
+:root {
+  --state-ink: 0 0 0;          /* by theme: darken in light theme */
+  --blend: multiply;           /* by theme: multiply pairs with dark ink */
+  /* strengths, by ink direction — not by theme */
+  --hover-dark: 0.06;          /* subtractive: a little goes a long way */
+  --pressed-dark: 0.12;
+  --hover-light: 0.10;         /* additive: needs more to read the same */
+  --pressed-light: 0.16;
+  --mix-space: srgb;
+  /* OKLCH lightness where the Flip preset reverses direction. 0.68 sits
+     between the 400s (L 0.74) and every family's 500 (L 0.60–0.64), so 500
+     and darker take white ink. */
+  --ink-flip: 0.68;
+
+  --page: #ffffff;
+  --fg: #17171A;
+  --fg-dim: #6C6F7B;
+  --hairline: #D0D1D7;
+  --panel: #F6F6F7;
+}
+html.dark {
+  --state-ink: 255 255 255;    /* by theme: lighten in dark theme */
+  --blend: screen;             /* by theme: screen pairs with light ink */
+  --page: #17171A;
+  --fg: #F6F6F7;
+  --fg-dim: #A8ABB5;
+  --hairline: #4E5058;
+  --panel: #2F3035;
+}
+/* manual overrides */
+html.ink-black  { --state-ink: 0 0 0; }
+html.ink-white  { --state-ink: 255 255 255; }
+html.ink-tint   { --state-ink: 43 76 242; }
+html.blend-normal   { --blend: normal; }
+html.blend-multiply { --blend: multiply; }
+html.blend-screen   { --blend: screen; }
+/* manual only, never auto: overlay branches on the backdrop, so its strength
+   peaks at mid-grey and falls to zero at both ends of every ramp. Its
+   identity is mid-grey rather than white or black. */
+html.blend-overlay  { --blend: overlay; }
+/* manual only: difference is |Cb − Cs|, so it moves the surface toward its
+   own inverse. With white ink that genuinely auto-flips direction at
+   mid-grey — strongest at both extremes, zero in the middle, the exact
+   inverse of overlay's curve. With black ink it is inert. Per-channel, so
+   it shifts hue on saturated surfaces. */
+html.blend-difference { --blend: difference; }
+
+/* ───────────────────────────── page ───────────────────────────── */
+* { box-sizing: border-box; }
+body {
+  margin: 0; padding: 26px 28px 72px;
+  background: var(--page); color: var(--fg);
+  font: 14px/1.5 ui-sans-serif, -apple-system, "Segoe UI", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+h1 { font-size: 17px; margin: 0 0 6px; letter-spacing: -0.01em; }
+p.lede { margin: 0 0 22px; color: var(--fg-dim); max-width: 80ch; }
+code { font: 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--panel); padding: 1px 4px; border-radius: 3px; }
+
+/* full-bleed sticky wrapper: its own page-colored background covers the
+   content scrolling underneath, including the body's side padding */
+.sticky {
+  position: sticky; top: 0; z-index: 10;
+  margin: 0 -28px 22px; padding: 10px 28px 12px;
+  background: var(--page);
+  border-bottom: 1px solid transparent;
+}
+.sticky.pinned { border-bottom-color: var(--hairline); }
+.controls {
+  display: flex; flex-wrap: wrap; gap: 14px 24px; align-items: flex-end;
+  padding: 12px 14px; border: 1px solid var(--hairline); border-radius: 10px;
+  background: var(--panel);
+}
+.ctl { display: flex; flex-direction: column; gap: 6px; }
+.ctl > label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--fg-dim); }
+/* inline-flex + align-self keep the track at its content width instead of
+   stretching to fill the flex column it sits in */
+.seg {
+  display: inline-flex; width: fit-content; align-self: flex-start;
+  border: 1px solid var(--hairline); border-radius: 7px; overflow: hidden;
+}
+.seg button {
+  appearance: none; border: 0; background: transparent; color: var(--fg);
+  font: inherit; font-size: 13px; padding: 5px 11px; cursor: pointer;
+}
+.seg button + button { border-left: 1px solid var(--hairline); }
+.seg button[aria-pressed="true"] { background: var(--fg); color: var(--page); }
+.ctl input[type=range] { width: 136px; accent-color: #808391; }
+.tag { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--fg-dim); width: 50px; }
+.val { font: 12px/1 ui-monospace, Menlo, monospace; color: var(--fg-dim); min-width: 4ch; }
+.row-inline { display: flex; align-items: center; gap: 10px; }
+
+/* ───────────────────────── the specimen grid ───────────────────────── */
+.grid {
+  display: grid;
+  /* the last column sizes to its header (the blend control is wider than a
+     specimen); .opt is capped so the boxes stay aligned across both columns */
+  grid-template-columns: 112px 248px max-content;
+  gap: 6px 18px;
+  align-items: center;
+}
+.head {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 8px;
+  align-self: end; padding-bottom: 4px;
+}
+.head .label {
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--fg-dim);
+}
+/* family separator: a bare rule, no label */
+.group {
+  grid-column: 1 / -1;
+  margin: 7px 0 3px;
+  border-bottom: 1px solid var(--hairline);
+}
+.tok { display: flex; flex-direction: column; gap: 1px; }
+.tok b { font-weight: 600; font-size: 13px; }
+.tok span { font: 11px/1 ui-monospace, Menlo, monospace; color: var(--fg-dim); }
+
+/* one option per cell: the specimen box, then a live square.
+   --ink is the one thing both options consume. By default it is the theme
+   (or manually chosen) direction. */
+.opt {
+  display: flex; gap: 10px; align-items: center;
+  width: 248px;
+  --ink: rgb(var(--state-ink));
+
+  /* FLIP: derive the direction from the surface itself, ignoring the theme.
+     Inside a relative color, `l` is a plain number, so clamp() turns it into
+     a 0-or-1 switch: 1 (white) below the threshold, 0 (black) above it.
+     Chroma 0 keeps the ink neutral; the * 1000 makes it a step, not a ramp. */
+  --ink-auto: oklch(from var(--surface)
+                    clamp(0, (var(--ink-flip) - l) * 1000, 1)
+                    0 h);
+}
+@supports (color: oklch(from red l c h)) {
+  html.ink-flip .opt { --ink: var(--ink-auto); }
+}
+
+/* ── resolve the strength pair from the ink direction ──────────────────────
+   One switch, one formula. Every mode below declares only WHICH DIRECTION it
+   is; none of them names a strength, so the four strengths stay independent
+   globals that every mode draws from.
+
+   --light-ink is 0 for a darkening layer, 1 for a lightening one, and the
+   calc is a straight lerp between the two pairs — with a 0/1 switch it
+   resolves to exactly one of them. */
+.opt {
+  --light-ink: 0;
+  --state-hover:   calc(var(--hover-dark)   + (var(--hover-light)   - var(--hover-dark))   * var(--light-ink));
+  --state-pressed: calc(var(--pressed-dark) + (var(--pressed-light) - var(--pressed-dark)) * var(--light-ink));
+}
+
+/* Order is the cascade: theme first, then an explicit ink choice, then
+   Flip's per-surface direction, which is the most specific. */
+html.dark .opt      { --light-ink: 1; }
+
+html.ink-black .opt,
+html.ink-tint .opt  { --light-ink: 0; }
+html.ink-white .opt { --light-ink: 1; }
+
+/* Flip: direction is a property of the surface, so the switch has to be set
+   per surface. A scalar cannot be read out of a color in CSS — relative color
+   syntax exposes `l` only inside a color function — so the direction is
+   stamped from the same --ink-flip threshold the ink derivation uses. In a
+   real system a surface token would simply ship its direction alongside it.
+   The ghost row stays unstamped and so falls through to the theme rule. */
+html.ink-flip .opt[data-dir="dark"]  { --light-ink: 0; }
+html.ink-flip .opt[data-dir="light"] { --light-ink: 1; }
+/* Ghost opts out: `transparent` reads as lightness 0 AND alpha 0, so the
+   switch would always pick white and Option A would vanish entirely. A
+   transparent surface has no lightness of its own to derive from — the
+   direction has to come from whatever context the component sits in. */
+html.ink-flip .opt[data-ghost] { --ink: rgb(var(--state-ink)); }
+
+/* the box is the plain surface token, untouched */
+.surface {
+  background-color: var(--surface);
+  flex: 1 1 auto; min-width: 0;
+  border-radius: 9px;
+  padding: 7px;
+  display: flex;
+  gap: 6px;
+  outline: 1px solid var(--hairline);
+  outline-offset: -1px;
+}
+/* the patches are the same surface plus the state layer, in situ */
+.state {
+  flex: 1 1 0; height: 32px; border-radius: 6px;
+  display: grid; place-items: center;
+  font-size: 10px; letter-spacing: 0.03em;
+  color: var(--on-surface);
+  border: 0; padding: 0; margin: 0; font-family: inherit;
+  transition: --state 140ms ease;
+}
+button.state { cursor: pointer; }
+
+/* a bare square with no forced state: the component itself, driven only by
+   :hover and :active. Height matches the specimen box beside it. */
+.live {
+  flex: 0 0 auto; width: 46px; height: 46px; border-radius: 9px;
+  outline: 1px solid var(--hairline); outline-offset: -1px;
+}
+
+/* Backdrop for the ghost row only. It goes on the cell, BEHIND the box and
+   its live square — not on .surface, where background-image would paint above
+   background-color and tile the checker over every opaque surface too. */
+body.checker .opt[data-ghost] {
+  background-image:
+    linear-gradient(45deg, var(--hairline) 25%, transparent 25% 75%, var(--hairline) 75%),
+    linear-gradient(45deg, var(--hairline) 25%, transparent 25% 75%, var(--hairline) 75%);
+  background-size: 14px 14px;
+  background-position: 0 0, 7px 7px;
+}
+
+</style>
+</head>
+<body>
+
+<h1>Unified state layer</h1>
+<p class="lede">
+  <strong>Option A:</strong> <code>color-mix()</code>. <strong>Option B:</strong> an extra
+  <code>background-image</code> layer. Ink is either automatic (Flip, derived per surface) or by theme;
+  its strength is independent, one pair per direction. No per-surface state tokens.
+</p>
+
+<div class="sticky" id="sticky">
+<div class="controls">
+  <div class="ctl">
+    <label>Theme</label>
+    <div class="seg" id="seg-theme">
+      <button data-v="light" aria-pressed="true">Light</button>
+      <button data-v="dark" aria-pressed="false">Dark</button>
+    </div>
+  </div>
+  <div class="ctl">
+    <label>Ink</label>
+    <div class="seg" id="seg-ink">
+      <button data-v="flip" aria-pressed="true">Flip</button>
+      <button data-v="theme" aria-pressed="false">By theme</button>
+      <button data-v="black" aria-pressed="false">Black</button>
+      <button data-v="white" aria-pressed="false">White</button>
+      <button data-v="tint" aria-pressed="false">Tint</button>
+    </div>
+  </div>
+  <div class="ctl">
+    <label>Dark ink · darkening layer</label>
+    <div class="row-inline">
+      <span class="tag">hover</span>
+      <input type="range" id="r-hover-dark" min="0" max="0.4" step="0.005">
+      <span class="val" id="v-hover-dark"></span>
+    </div>
+    <div class="row-inline">
+      <span class="tag">pressed</span>
+      <input type="range" id="r-pressed-dark" min="0" max="0.4" step="0.005">
+      <span class="val" id="v-pressed-dark"></span>
+    </div>
+  </div>
+  <div class="ctl">
+    <label>Light ink · lightening layer</label>
+    <div class="row-inline">
+      <span class="tag">hover</span>
+      <input type="range" id="r-hover-light" min="0" max="0.4" step="0.005">
+      <span class="val" id="v-hover-light"></span>
+    </div>
+    <div class="row-inline">
+      <span class="tag">pressed</span>
+      <input type="range" id="r-pressed-light" min="0" max="0.4" step="0.005">
+      <span class="val" id="v-pressed-light"></span>
+    </div>
+  </div>
+  <div class="ctl">
+    <label>Transparent backdrop</label>
+    <div class="seg" id="seg-checker">
+      <button data-v="off" aria-pressed="true">Plain</button>
+      <button data-v="on" aria-pressed="false">Checker</button>
+    </div>
+  </div>
+</div>
+</div>
+
+<div class="grid" id="grid">
+  <div class="head"></div>
+  <div class="head">
+    <span class="label">Option A · color-mix</span>
+    <!-- interpolation space: a parameter of color-mix(), so it only exists here -->
+    <div class="seg" id="seg-space">
+      <button data-v="srgb" aria-pressed="true">srgb</button>
+      <button data-v="oklab" aria-pressed="false">oklab</button>
+    </div>
+  </div>
+  <div class="head">
+    <span class="label">Option B · background layer</span>
+    <!-- blend mode: a property of the background layers, so it only exists here -->
+    <div class="seg" id="seg-blend">
+      <button data-v="normal" aria-pressed="true">Normal</button>
+      <button data-v="theme" aria-pressed="false">By theme</button>
+      <button data-v="multiply" aria-pressed="false">Multiply</button>
+      <button data-v="screen" aria-pressed="false">Screen</button>
+      <button data-v="overlay" aria-pressed="false">Overlay</button>
+      <button data-v="difference" aria-pressed="false">Difference</button>
+    </div>
+  </div>
+</div>
+
+
+<script>
+/* The colour ramps were sampled out of the palette screenshot, so treat the
+   hexes as ±1 per channel and paste the canonical values over them. */
+const FAMILIES = [
+  ['Grey', [
+    ['Grey50',  '#F6F6F7'], ['Grey100', '#EDEEF0'], ['Grey200', '#E1E2E6'],
+    ['Grey300', '#D0D1D7'], ['Grey400', '#A8ABB5'], ['Grey500', '#808391'],
+    ['Grey600', '#6C6F7B'], ['Grey700', '#4E5058'], ['Grey800', '#2F3035'],
+    ['Grey900', '#17171A'],
+  ]],
+  /* the boundary cases sit next to the greys, since that is what they test */
+  ['Extremes', [
+    ['White', '#FFFFFF'], ['Black', '#000000'], ['Transparent', 'transparent'],
+  ]],
+  ['Blue', [
+    ['Blue50', '#F4F7FD'], ['Blue300', '#C0D2F5'], ['Blue500', '#4F81E5'],
+    ['Blue700', '#214CA2'], ['Blue900', '#091830'],
+  ]],
+  ['Red', [
+    ['Red50', '#FFF4F3'], ['Red300', '#FAC6C1'], ['Red500', '#EF4437'],
+    ['Red700', '#942B23'], ['Red900', '#2E0C0A'],
+  ]],
+  ['Orange', [
+    ['Orange50', '#FFF5ED'], ['Orange300', '#FCC89C'], ['Orange500', '#C86C29'],
+    ['Orange700', '#7B411A'], ['Orange900', '#241409'],
+  ]],
+  ['Yellow', [
+    ['Yellow50', '#FAF7E1'], ['Yellow300', '#F5CD5B'], ['Yellow500', '#A37F35'],
+    ['Yellow700', '#664B20'], ['Yellow900', '#1E1709'],
+  ]],
+  ['Green', [
+    ['Green50', '#F1F8F6'], ['Green300', '#B7D9CB'], ['Green500', '#33956F'],
+    ['Green700', '#0B5C3C'], ['Green900', '#041C12'],
+  ]],
+  ['Teal', [
+    ['Teal50', '#F2F7FA'], ['Teal300', '#B9D7E1'], ['Teal500', '#3B8DAA'],
+    ['Teal700', '#125671'], ['Teal900', '#051A23'],
+  ]],
+  ['Purple', [
+    ['Purple50', '#F7F5FF'], ['Purple300', '#D7CBF8'], ['Purple500', '#8E6EEB'],
+    ['Purple700', '#562CCC'], ['Purple900', '#190D3E'],
+  ]],
+];
+
+const grid = document.getElementById('grid');   // header row is in the markup
+
+// readable label color for text sitting on the surface
+const onSurface = (hex) => {
+  if (hex === 'transparent') return 'var(--fg)';
+  const n = parseInt(hex.slice(1), 16);
+  const srgb = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map(v => {
+    const c = v / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  });
+  const L = 0.2126 * srgb[0] + 0.7152 * srgb[1] + 0.0722 * srgb[2];
+  return L > 0.42 ? '#17171A' : '#FFFFFF';
+};
+
+const TOKENS = FAMILIES.flatMap(([family, rows]) => rows.map(r => [...r, family]));
+
+let lastFamily = null;
+for (const [name, hex, family] of TOKENS) {
+  if (family !== lastFamily) {
+    lastFamily = family;
+    const g = document.createElement('div');
+    g.className = 'group';
+    grid.append(g);
+  }
+
+  const tok = document.createElement('div');
+  tok.className = 'tok';
+  tok.innerHTML = `<b>${name}</b><span>${hex === 'transparent' ? 'transparent' : hex.toUpperCase()}</span>`;
+  grid.append(tok);
+
+  for (const opt of ['a', 'b']) {
+    const wrap = document.createElement('div');
+    wrap.className = 'opt';
+    if (hex === 'transparent') wrap.dataset.ghost = '';   // no lightness to derive from
+    wrap.style.setProperty('--surface', hex);
+    wrap.style.setProperty('--on-surface', onSurface(hex));
+
+    const box = document.createElement('div');
+    box.className = 'surface';
+    for (const st of ['hover', 'pressed']) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = `state state--${opt} is-${st}`;
+      b.textContent = st;
+      box.append(b);
+    }
+
+    const live = document.createElement('button');
+    live.type = 'button';
+    live.className = `state state--${opt} live`;
+    live.title = `${name} · live hover / press`;
+
+    wrap.append(box, live);
+    grid.append(wrap);
+  }
+}
+
+/* Stamp the Flip direction per surface, read from the same --ink-flip
+   threshold the ink derivation uses, so the two can't drift apart.
+   The ghost row is left unstamped: with no lightness of its own it follows
+   the global direction, like its contextual ink does. */
+(() => {
+  const probe = document.createElement('div');
+  probe.style.cssText = 'position:fixed;left:-9999px;top:0;width:1px;height:1px';
+  document.body.append(probe);
+  const flip = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--ink-flip'));
+  for (const el of document.querySelectorAll('.opt:not([data-ghost])')) {
+    probe.style.backgroundColor = `oklch(from ${el.style.getPropertyValue('--surface')} l 0 h)`;
+    const m = getComputedStyle(probe).backgroundColor.match(/okl(?:ch|ab)\(\s*([\d.]+)/);
+    if (m) el.dataset.dir = parseFloat(m[1]) <= flip ? 'light' : 'dark';
+  }
+  probe.remove();
+})();
+
+/* ── controls ── */
+function wireSeg(id, fn) {
+  const seg = document.getElementById(id);
+  seg.addEventListener('click', e => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    seg.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+    fn(b.dataset.v);
+  });
+}
+const root = document.documentElement;
+const cls = root.classList;
+
+/* Four strengths, one per (state × ink direction). They are global now —
+   nothing clears them on a theme switch, because theme no longer selects
+   them. Which pair an element uses is decided in CSS, per element. */
+const STRENGTHS = ['hover-dark', 'pressed-dark', 'hover-light', 'pressed-light'];
+function syncSliders() {
+  const cs = getComputedStyle(root);
+  for (const key of STRENGTHS) {
+    const n = parseFloat(cs.getPropertyValue('--' + key));
+    document.getElementById('r-' + key).value = n;
+    document.getElementById('v-' + key).textContent = n.toFixed(3);
+  }
+}
+
+wireSeg('seg-theme', v => cls.toggle('dark', v === 'dark'));
+wireSeg('seg-ink', v => {
+  cls.remove('ink-black', 'ink-white', 'ink-tint', 'ink-flip');
+  if (v !== 'theme') cls.add('ink-' + v);         // "by theme" → inherit from theme
+});
+wireSeg('seg-blend', v => {
+  cls.remove('blend-normal', 'blend-multiply', 'blend-screen',
+             'blend-overlay', 'blend-difference');
+  if (v !== 'theme') cls.add('blend-' + v);       // "by theme" → inherit from theme
+});
+wireSeg('seg-space', v => root.style.setProperty('--mix-space', v));
+wireSeg('seg-checker', v => document.body.classList.toggle('checker', v === 'on'));
+
+// hairline under the controls only once they are actually pinned
+const sticky = document.getElementById('sticky');
+const onScroll = () => sticky.classList.toggle('pinned', sticky.getBoundingClientRect().top <= 0);
+addEventListener('scroll', onScroll, { passive: true });
+onScroll();
+
+for (const key of STRENGTHS) {
+  const r = document.getElementById('r-' + key), v = document.getElementById('v-' + key);
+  r.addEventListener('input', () => {
+    root.style.setProperty('--' + key, r.value);
+    v.textContent = Number(r.value).toFixed(3);
+  });
+}
+
+syncSliders();
+</script>
+</body>
+</html>
