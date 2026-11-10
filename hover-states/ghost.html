@@ -1,0 +1,606 @@
+<!-- defaults: direction derived from the backdrop -->
+<html lang="en" class="ink-flip">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ghost state layers — color-mix vs ink layer + backdrop-filter</title>
+<style>
+/* ──────────────────────────────────────────────────────────────────────────
+   A ghost component has no surface, so the state IS the layer. Two
+   consequences shape this page:
+
+   1. Direction cannot come from the component — `transparent` has no
+      lightness to derive from. It comes from the BACKDROP, which is what
+      each row varies.
+   2. Because there is nothing of its own to paint over, the element can also
+      filter what is already behind it.
+
+   OPTION A   a neutral ink layer, via color-mix()
+   OPTION B   the same ink layer, plus backdrop-filter saturate + brightness
+
+   B is a strict superset of A: set both gains to 0 and the two columns become
+   pixel-identical. Above 0 the filter adds what a flat layer cannot — it
+   multiplies the backdrop's own chroma, so the state reads as the surface
+   intensifying rather than as grey gauze over it.
+   ────────────────────────────────────────────────────────────────────────── */
+@property --state {
+  syntax: '<number>';
+  inherits: false;
+  initial-value: 0;
+}
+
+/* ── OPTION A ── mix the ink into `transparent`.
+   color-mix premultiplies, so mixing the ink at P% into a zero-alpha color
+   yields exactly the ink at alpha P. Nothing is blended; it is just a layer.
+
+   .state.state--a, not .state--a: the base .state rule sets
+   background-color: transparent to strip the button default, and at equal
+   specificity the later rule would win and silently kill this one. */
+.state.state--a {
+  background-color: color-mix(in srgb, var(--ink) calc(var(--state) * 100%), transparent);
+}
+
+/* ── OPTION B ── the same layer, as a background-image layer, plus a filter
+   on the backdrop behind it.
+
+   saturate() multiplies existing chroma. That makes it powerful on brand
+   surfaces and arithmetically incapable of touching a neutral — measured at
+   saturate(1.5), #4F81E5 → #3883FF but #FFFFFF → #FFFFFF. The ink layer is
+   what covers that blind spot, which is why B keeps it rather than relying
+   on the filter alone.
+
+   brightness follows the ink direction through an invert sandwich rather than
+   by flipping the sign. A white layer at alpha a gives a + (1−a)·C, which
+   rearranges to 1 − (1−a)(1−C): a multiply in INVERTED space. So
+   invert → brightness(1−a) → invert is EXACTLY a white layer, pure black
+   included, where a plain brightness(1+a) is multiplicative and returns 0.
+   invert(0) is the identity, so the same declaration covers both directions.
+   saturate stays outside the sandwich so it acts on the real color.
+
+   Consequence worth knowing: the filter alone can reproduce a neutral layer
+   exactly, so B's ink layer is NOT arithmetically required. It is kept as a
+   floor — backdrop-filter needs an intact backdrop root (no ancestor with
+   filter, opacity < 1, a transform, will-change or contain: paint), costs a
+   composited layer per element, and does nothing at all where unsupported.
+   It is also the only way to express a tinted, non-neutral ink, which is why
+   the layer carries var(--ink) rather than a hardcoded black or white. */
+.state.state--b {
+  background-image: linear-gradient(rgb(from var(--ink) r g b / var(--state)) 0 0);
+  -webkit-backdrop-filter: var(--b-filter);
+  backdrop-filter: var(--b-filter);
+}
+.state--b {
+  --b-filter:
+    saturate(calc(1 + var(--state) * var(--sat)))
+    invert(var(--light-ink))
+    brightness(calc(1 - var(--state) * var(--b-bright)))
+    invert(var(--light-ink));
+}
+
+/* ── OPTION C ── always a white layer, always brightness below 1.
+   The filter darkens the backdrop, then a lightening layer composites over
+   it:   out = a + (1 − a)·b·C
+   That is an affine compression toward a fixed point at
+         C* = a / (1 − (1 − a)·b)
+   Backdrops above C* land below it and darken; backdrops below it lighten.
+   So DIRECTION IS AUTOMATIC — no threshold, no per-surface stamping, no ink
+   token, and it works on pure White and pure Black alike. Measured at
+   a = 0.10, b = 0.95: crossover 176/255, White −12, Black +26.
+
+   The cost is the mirror image of Flip's. Flip has a direction seam between
+   two adjacent ramp steps; this has a magnitude DEAD ZONE at the crossover —
+   Grey400 (168) moves by 0. Moving the brightness gain moves C*. */
+.state.state--c {
+  background-image: linear-gradient(rgb(255 255 255 / var(--state)) 0 0);
+  -webkit-backdrop-filter: var(--c-filter);
+  backdrop-filter: var(--c-filter);
+}
+.state--c {
+  --c-filter:
+    saturate(calc(1 + var(--state) * var(--sat)))
+    brightness(calc(1 - var(--state) * var(--c-bright)));
+}
+
+/* the only rules that name a pseudo-class */
+.state:hover  { --state: var(--state-hover); }
+.state:active { --state: var(--state-pressed); }
+.is-hover     { --state: var(--state-hover); }
+.is-pressed   { --state: var(--state-pressed); }
+/* C has no direction, so it takes one strength pair instead of the flip's */
+.state--c.is-hover,   .state--c:hover  { --state: var(--c-hover); }
+.state--c.is-pressed, .state--c:active { --state: var(--c-pressed); }
+
+/* ───────────────────────────── theme ───────────────────────────── */
+:root {
+  --state-ink: 0 0 0;
+  --hover-dark: 0.06;          /* subtractive: a little goes a long way */
+  --pressed-dark: 0.12;
+  --hover-light: 0.10;         /* additive: needs more to read the same */
+  --pressed-light: 0.16;
+  --ink-flip: 0.68;            /* OKLCH lightness where direction reverses */
+  --sat: 8;                    /* shared by B and C: saturate = 1 + state × this */
+  --b-bright: 0.5;             /* brightness = 1 ∓ state × this → 0.06 ⇒ 0.97 */
+  --c-hover: 0.10;             /* C has no direction: one strength pair */
+  --c-pressed: 0.16;
+  --c-bright: 0.5;             /* brightness = 1 − state × this, always < 1 */
+
+  --page: #ffffff;
+  --fg: #17171A;
+  --fg-dim: #6C6F7B;
+  --hairline: #D0D1D7;
+  --panel: #F6F6F7;
+}
+html.dark {
+  --state-ink: 255 255 255;
+  --page: #17171A;
+  --fg: #F6F6F7;
+  --fg-dim: #A8ABB5;
+  --hairline: #4E5058;
+  --panel: #2F3035;
+}
+html.ink-black { --state-ink: 0 0 0; }
+html.ink-white { --state-ink: 255 255 255; }
+
+/* ── ink and strength, resolved per cell from the BACKDROP ── */
+.cell {
+  --ink: rgb(var(--state-ink));
+  --ink-auto: oklch(from var(--backdrop)
+                    clamp(0, (var(--ink-flip) - l) * 1000, 1)
+                    0 h);
+}
+@supports (color: oklch(from red l c h)) {
+  html.ink-flip .cell { --ink: var(--ink-auto); }
+}
+/* a gradient backdrop has no single lightness to derive from, so those rows
+   carry an explicit ink and direction instead */
+html.ink-flip .cell[data-fixed-ink] { --ink: var(--fixed-ink); }
+
+/* Label color is the SAME decision as ink direction — light backdrop wants
+   dark on it, dark backdrop wants light — so it comes off the same threshold
+   rather than a separate luminance heuristic. It deliberately does not follow
+   --ink: a manual Black/White ink choice must not make labels illegible. */
+.cell { --on-backdrop: currentColor; }
+@supports (color: oklch(from red l c h)) {
+  .cell {
+    --on-backdrop: oklch(from var(--backdrop)
+                         clamp(0, (var(--ink-flip) - l) * 1000, 1)
+                         0 h);
+  }
+}
+
+.cell {
+  --light-ink: 0;              /* 0 = darkening, 1 = lightening */
+  --state-hover:   calc(var(--hover-dark)   + (var(--hover-light)   - var(--hover-dark))   * var(--light-ink));
+  --state-pressed: calc(var(--pressed-dark) + (var(--pressed-light) - var(--pressed-dark)) * var(--light-ink));
+}
+html.dark .cell      { --light-ink: 1; }
+html.ink-black .cell { --light-ink: 0; }
+html.ink-white .cell { --light-ink: 1; }
+html.ink-flip .cell[data-dir="dark"]  { --light-ink: 0; }
+html.ink-flip .cell[data-dir="light"] { --light-ink: 1; }
+
+/* ───────────────────────────── page ───────────────────────────── */
+* { box-sizing: border-box; }
+body {
+  margin: 0; padding: 26px 28px 72px;
+  background: var(--page); color: var(--fg);
+  font: 14px/1.5 ui-sans-serif, -apple-system, "Segoe UI", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+h1 { font-size: 17px; margin: 0 0 6px; letter-spacing: -0.01em; }
+p.lede { margin: 0 0 22px; color: var(--fg-dim); max-width: 86ch; }
+code { font: 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--panel); padding: 1px 4px; border-radius: 3px; }
+
+.sticky {
+  position: sticky; top: 0; z-index: 10;
+  margin: 0 -28px 22px; padding: 10px 28px 12px;
+  background: var(--page);
+  border-bottom: 1px solid transparent;
+}
+.sticky.pinned { border-bottom-color: var(--hairline); }
+.controls {
+  display: flex; flex-wrap: wrap; gap: 16px 26px; align-items: flex-start;
+  padding: 12px 14px; border: 1px solid var(--hairline); border-radius: 10px;
+  background: var(--panel);
+}
+.ctl { display: flex; flex-direction: column; gap: 6px; }
+.ctl > label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--fg-dim); }
+.seg {
+  display: inline-flex; width: fit-content; align-self: flex-start;
+  border: 1px solid var(--hairline); border-radius: 7px; overflow: hidden;
+}
+.seg button {
+  appearance: none; border: 0; background: transparent; color: var(--fg);
+  font: inherit; font-size: 13px; padding: 5px 11px; cursor: pointer;
+}
+.seg button + button { border-left: 1px solid var(--hairline); }
+.seg button[aria-pressed="true"] { background: var(--fg); color: var(--page); }
+.ctl input[type=range] { width: 136px; accent-color: #808391; }
+.tag { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--fg-dim); width: 54px; }
+.val { font: 12px/1 ui-monospace, Menlo, monospace; color: var(--fg-dim); min-width: 4ch; }
+.row-inline { display: flex; align-items: center; gap: 10px; }
+.resolved {
+  font: 10.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--fg-dim); white-space: pre;
+}
+
+/* ───────────────────────── the specimen grid ───────────────────────── */
+.grid {
+  display: grid;
+  grid-template-columns: 104px repeat(3, 210px);
+  gap: 6px 18px;
+  align-items: center;
+}
+.head {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 8px;
+  align-self: end; padding-bottom: 4px;
+}
+.head .label {
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--fg-dim);
+}
+.group { grid-column: 1 / -1; margin: 7px 0 3px; border-bottom: 1px solid var(--hairline); }
+.tok { display: flex; flex-direction: column; gap: 1px; }
+.tok b { font-weight: 600; font-size: 13px; }
+.tok span { font: 11px/1 ui-monospace, Menlo, monospace; color: var(--fg-dim); }
+
+/* the cell IS the backdrop; the ghosts on it have no background of their own */
+.cell {
+  background: var(--backdrop);
+  border-radius: 9px;
+  padding: 7px;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  outline: 1px solid var(--hairline);
+  outline-offset: -1px;
+}
+.state {
+  flex: 1 1 0; height: 34px; border-radius: 6px;
+  display: grid; place-items: center;
+  font-size: 10px; letter-spacing: 0.03em;
+  color: var(--on-backdrop);
+  background-color: transparent;          /* ghost: no surface of its own */
+  border: 0; padding: 0; margin: 0; font-family: inherit;
+}
+/* only the live squares animate: a transition on the forced specimens makes
+   any synchronous read of --state sample a mid-flight value */
+.state.live { flex: 0 0 auto; width: 48px; transition: --state 140ms ease; }
+button.state { cursor: pointer; }
+/* the direction stamping lands after first paint, which would otherwise
+   animate --state on every flipped row as the page loads */
+body.preload .state { transition: none; }
+</style>
+</head>
+<body class="preload">
+
+<h1>Ghost state layers</h1>
+<p class="lede">
+  A ghost component has no surface, so the state <em>is</em> the layer, and direction has to come from the
+  backdrop rather than from the component.
+  <strong>A:</strong> a neutral ink layer via <code>color-mix()</code>.
+  <strong>B:</strong> the same ink layer plus <code>backdrop-filter: saturate() brightness()</code>.
+  <strong>C:</strong> always a white layer <em>and</em> always <code>brightness() &lt; 1</code>, which
+  composes to <code>a + (1−a)·b·C</code> — an affine squeeze toward a fixed point, so it darkens light
+  backdrops and lightens dark ones with no direction logic at all.
+  B is a superset of A: at zero gain those two columns are identical. C needs no ink and no flip, and pays
+  for it with a dead zone at its crossover instead of a seam between two ramp steps.
+</p>
+
+<div class="sticky" id="sticky">
+<div class="controls">
+  <div class="ctl">
+    <label>Theme</label>
+    <div class="seg" id="seg-theme">
+      <button data-v="light" aria-pressed="true">Light</button>
+      <button data-v="dark" aria-pressed="false">Dark</button>
+    </div>
+  </div>
+  <div class="ctl">
+    <label>Ink</label>
+    <div class="seg" id="seg-ink">
+      <button data-v="flip" aria-pressed="true">Flip</button>
+      <button data-v="theme" aria-pressed="false">By theme</button>
+      <button data-v="black" aria-pressed="false">Black</button>
+      <button data-v="white" aria-pressed="false">White</button>
+    </div>
+  </div>
+  <div class="ctl">
+    <label>Darkening · A + B</label>
+    <div class="row-inline">
+      <span class="tag">hover</span>
+      <input type="range" id="r-hover-dark" min="0" max="0.4" step="0.005">
+      <span class="val" id="v-hover-dark"></span>
+    </div>
+    <div class="row-inline">
+      <span class="tag">pressed</span>
+      <input type="range" id="r-pressed-dark" min="0" max="0.4" step="0.005">
+      <span class="val" id="v-pressed-dark"></span>
+    </div>
+  </div>
+  <div class="ctl">
+    <label>Lightening · A + B</label>
+    <div class="row-inline">
+      <span class="tag">hover</span>
+      <input type="range" id="r-hover-light" min="0" max="0.4" step="0.005">
+      <span class="val" id="v-hover-light"></span>
+    </div>
+    <div class="row-inline">
+      <span class="tag">pressed</span>
+      <input type="range" id="r-pressed-light" min="0" max="0.4" step="0.005">
+      <span class="val" id="v-pressed-light"></span>
+    </div>
+  </div>
+  <div class="ctl">
+    <label>Saturate gain · B + C</label>
+    <div class="row-inline">
+      <input type="range" id="r-sat" min="0" max="24" step="0.5">
+      <span class="val" id="v-sat"></span>
+    </div>
+  </div>
+  <div class="ctl">
+    <label>Brightness gain · B</label>
+    <div class="row-inline">
+      <input type="range" id="r-b-bright" min="0" max="3" step="0.05">
+      <span class="val" id="v-b-bright"></span>
+    </div>
+  </div>
+  <div class="ctl">
+    <label>C · own strength + darken</label>
+    <div class="row-inline">
+      <span class="tag">hover</span>
+      <input type="range" id="r-c-hover" min="0" max="0.4" step="0.005">
+      <span class="val" id="v-c-hover"></span>
+    </div>
+    <div class="row-inline">
+      <span class="tag">pressed</span>
+      <input type="range" id="r-c-pressed" min="0" max="0.4" step="0.005">
+      <span class="val" id="v-c-pressed"></span>
+    </div>
+    <div class="row-inline">
+      <span class="tag">darken</span>
+      <input type="range" id="r-c-bright" min="0" max="3" step="0.05">
+      <span class="val" id="v-c-bright"></span>
+    </div>
+  </div>
+  <div class="ctl">
+    <label>Resolved</label>
+    <div class="resolved" id="resolved"></div>
+  </div>
+</div>
+</div>
+
+<div class="grid" id="grid">
+  <div class="head"></div>
+  <div class="head"><span class="label">A · color-mix layer</span></div>
+  <div class="head"><span class="label">B · layer + backdrop-filter</span></div>
+  <div class="head"><span class="label">C · white layer + darken</span></div>
+</div>
+
+<script>
+/* backdrop per row. A third entry means the backdrop is not a single color,
+   so it carries an explicit direction instead of deriving one. */
+const ROWS = [
+  ['Grey50',  '#F6F6F7'],
+  ['Grey100', '#EDEEF0'],
+  ['Grey200', '#E1E2E6'],
+  ['Grey300', '#D0D1D7'],
+  ['Grey400', '#A8ABB5'],
+  ['Grey500', '#808391'],
+  ['Grey600', '#6C6F7B'],
+  ['Grey700', '#4E5058'],
+  ['Grey800', '#2F3035'],
+  ['Grey900', '#17171A'],
+  ['White',   '#FFFFFF'],
+  ['Black',   '#000000'],
+  null,
+  ['Blue50', '#F4F7FD'], ['Blue300', '#C0D2F5'], ['Blue500', '#4F81E5'],
+  ['Blue700', '#214CA2'], ['Blue900', '#091830'],
+  null,
+  ['Red50', '#FFF4F3'], ['Red300', '#FAC6C1'], ['Red500', '#EF4437'],
+  ['Red700', '#942B23'], ['Red900', '#2E0C0A'],
+  null,
+  ['Orange50', '#FFF5ED'], ['Orange300', '#FCC89C'], ['Orange500', '#C86C29'],
+  ['Orange700', '#7B411A'], ['Orange900', '#241409'],
+  null,
+  ['Yellow50', '#FAF7E1'], ['Yellow300', '#F5CD5B'], ['Yellow500', '#A37F35'],
+  ['Yellow700', '#664B20'], ['Yellow900', '#1E1709'],
+  null,
+  ['Green50', '#F1F8F6'], ['Green300', '#B7D9CB'], ['Green500', '#33956F'],
+  ['Green700', '#0B5C3C'], ['Green900', '#041C12'],
+  null,
+  ['Teal50', '#F2F7FA'], ['Teal300', '#B9D7E1'], ['Teal500', '#3B8DAA'],
+  ['Teal700', '#125671'], ['Teal900', '#051A23'],
+  null,
+  ['Purple50', '#F7F5FF'], ['Purple300', '#D7CBF8'], ['Purple500', '#8E6EEB'],
+  ['Purple700', '#562CCC'], ['Purple900', '#190D3E'],
+  null,
+  ['Brand gradient', 'linear-gradient(118deg, #2B4CF2, #7B2BF2)', 'light'],
+  ['Warm ramp',      'linear-gradient(100deg, #F5CD5B, #EF4437 45%, #091830)', 'light'],
+  ['Cool ramp',      'linear-gradient(100deg, #F4F7FD, #4F81E5 55%, #091830)', 'dark'],
+];
+
+const grid = document.getElementById('grid');
+
+for (const row of ROWS) {
+  if (row === null) {
+    const g = document.createElement('div');
+    g.className = 'group';
+    grid.append(g);
+    continue;
+  }
+  const [name, backdrop, fixedDir] = row;
+
+  const tok = document.createElement('div');
+  tok.className = 'tok';
+  tok.innerHTML = `<b>${name}</b><span>${backdrop.startsWith('#') ? backdrop : 'gradient'}</span>`;
+  grid.append(tok);
+
+  for (const method of ['a', 'b', 'c']) {
+    const cell = document.createElement('div');
+    cell.className = 'cell';
+    cell.style.setProperty('--backdrop', backdrop);
+    if (fixedDir) {
+      // gradient rows: the CSS derivation needs a solid color, so both the
+      // ink and the label color come from the row's declared direction
+      const ink = fixedDir === 'light' ? 'rgb(255 255 255)' : 'rgb(0 0 0)';
+      cell.dataset.fixedInk = '';
+      cell.dataset.dir = fixedDir;
+      cell.style.setProperty('--fixed-ink', ink);
+      cell.style.setProperty('--on-backdrop', ink);
+    }
+    for (const st of ['hover', 'pressed']) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = `state state--${method} is-${st}`;
+      b.textContent = st;
+      cell.append(b);
+    }
+    const live = document.createElement('button');
+    live.type = 'button';
+    live.className = `state state--${method} live`;
+    live.title = `${name} · live hover / press`;
+    cell.append(live);
+
+    grid.append(cell);
+  }
+}
+
+/* stamp the Flip direction for the solid backdrops, from the same threshold
+   the ink derivation uses, so the two cannot drift apart */
+(() => {
+  const probe = document.createElement('div');
+  probe.style.cssText = 'position:fixed;left:-9999px;top:0;width:1px;height:1px';
+  document.body.append(probe);
+  const flip = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--ink-flip'));
+  for (const el of document.querySelectorAll('.cell:not([data-fixed-ink])')) {
+    probe.style.backgroundColor = `oklch(from ${el.style.getPropertyValue('--backdrop')} l 0 h)`;
+    const m = getComputedStyle(probe).backgroundColor.match(/okl(?:ch|ab)\(\s*([\d.]+)/);
+    if (m) el.dataset.dir = parseFloat(m[1]) <= flip ? 'light' : 'dark';
+  }
+  probe.remove();
+  requestAnimationFrame(() => document.body.classList.remove('preload'));
+})();
+
+/* ── controls ── */
+const root = document.documentElement;
+const cls = root.classList;
+
+function wireSeg(id, fn) {
+  const seg = document.getElementById(id);
+  seg.addEventListener('click', e => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    seg.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+    fn(b.dataset.v);
+  });
+}
+wireSeg('seg-theme', v => cls.toggle('dark', v === 'dark'));
+wireSeg('seg-ink', v => {
+  cls.remove('ink-black', 'ink-white', 'ink-flip');
+  if (v !== 'theme') cls.add('ink-' + v);
+  updateResolved();
+});
+
+const SLIDERS = {
+  'hover-dark': 3, 'pressed-dark': 3, 'hover-light': 3, 'pressed-light': 3,
+  'sat': 1, 'b-bright': 2,
+  'c-hover': 3, 'c-pressed': 3, 'c-bright': 2,
+};
+/* The gains are "CSS units per unit of --state", so the filter a cell actually
+   gets is  saturate(1 + state × sat)  and  brightness(1 ∓ state × bright).
+   Because --state is small (0.06–0.16), the gains look large. Show the four
+   resolved values rather than making anyone do the arithmetic. */
+const cells = [...document.querySelectorAll('.cell')];
+
+function updateResolved() {
+  const cs = getComputedStyle(root);
+  const n = k => parseFloat(cs.getPropertyValue('--' + k));
+  const sat = n('sat'), bright = n('b-bright');
+  /* mirrors the --b-filter declaration: invert(0) is the identity, so the
+     darkening direction is shown without the sandwich it collapses to */
+  const line = (label, state, light) => {
+    const br = (1 - state * bright).toFixed(2);
+    return `${label.padEnd(15)} saturate(${(1 + state * sat).toFixed(2)}) ` +
+      (light ? `invert(1) brightness(${br}) invert(1)` : `brightness(${br})`);
+  };
+
+  /* C composes to  out = a + (1−a)·b·C, whose fixed point is where the
+     direction reverses. Reported in 0–255 so it can be read against the
+     ramp: a token sitting on it gets no state at all. */
+  const cBright = n('c-bright');
+  const cLine = (label, a) => {
+    const b = 1 - a * cBright;
+    const star = b >= 1 / (1 - a) ? NaN : a / (1 - (1 - a) * b);
+    return `${label.padEnd(15)} #FFFFFF / ${a.toFixed(3)}   ` +
+           `saturate(${(1 + a * sat).toFixed(2)}) brightness(${b.toFixed(2)})` +
+           `   crossover ${Number.isFinite(star) ? Math.round(star * 255) : '—'}/255`;
+  };
+
+  /* A is read off the page rather than recomputed: the ink color depends on
+     the row and the ink mode, so the only honest source is a real specimen.
+     Safe to read synchronously because only the live squares transition. */
+  const aLayer = (lightInk, state) => {
+    const cell = cells.find(c =>
+      parseFloat(getComputedStyle(c).getPropertyValue('--light-ink')) === lightInk);
+    if (!cell) return 'unused in this ink mode';
+    const el = cell.querySelector(`.state--a.is-${state}`);
+    const css = getComputedStyle(el).backgroundColor;
+    /* parsed, not round-tripped through a canvas: at alpha 0.1 the 8-bit
+       premultiplied store loses enough precision to turn #FFFFFF into #F5FFFF */
+    const srgb = css.match(/color\(srgb\s+([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)(?:\s*\/\s*([\d.]+))?/);
+    const legacy = css.match(/rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:[,\s]+([\d.]+))?/);
+    const ch = srgb ? srgb.slice(1, 4).map(v => +v * 255) : legacy ? legacy.slice(1, 4).map(Number) : [0, 0, 0];
+    const alpha = +((srgb || legacy || [])[4] ?? 1);
+    const hex = '#' + ch.map(v =>
+      Math.round(Math.min(255, Math.max(0, v))).toString(16).padStart(2, '0').toUpperCase()).join('');
+    return `${hex} / ${alpha.toFixed(3)}`;
+  };
+  const aLine = (label, lightInk, state) =>
+    `${label.padEnd(15)} ${aLayer(lightInk, state)}`;
+
+  document.getElementById('resolved').textContent = [
+    'A  ink layer',
+    '   ' + aLine('dark · hover',    0, 'hover'),
+    '   ' + aLine('dark · pressed',  0, 'pressed'),
+    '   ' + aLine('light · hover',   1, 'hover'),
+    '   ' + aLine('light · pressed', 1, 'pressed'),
+    '',
+    'B  the same layer, plus',
+    '   ' + line('dark · hover',    n('hover-dark'),    false),
+    '   ' + line('dark · pressed',  n('pressed-dark'),  false),
+    '   ' + line('light · hover',   n('hover-light'),   true),
+    '   ' + line('light · pressed', n('pressed-light'), true),
+    '',
+    'C  white layer + darken, no ink and no direction',
+    '   ' + cLine('hover',   n('c-hover')).trim(),
+    '   ' + cLine('pressed', n('c-pressed')).trim(),
+  ].join('\n');
+}
+
+function syncSliders() {
+  const cs = getComputedStyle(root);
+  for (const [key, digits] of Object.entries(SLIDERS)) {
+    const n = parseFloat(cs.getPropertyValue('--' + key));
+    document.getElementById('r-' + key).value = n;
+    document.getElementById('v-' + key).textContent = n.toFixed(digits);
+  }
+  updateResolved();
+}
+for (const [key, digits] of Object.entries(SLIDERS)) {
+  const r = document.getElementById('r-' + key), v = document.getElementById('v-' + key);
+  r.addEventListener('input', () => {
+    root.style.setProperty('--' + key, r.value);
+    v.textContent = Number(r.value).toFixed(digits);
+    updateResolved();
+  });
+}
+syncSliders();
+
+const sticky = document.getElementById('sticky');
+const onScroll = () => sticky.classList.toggle('pinned', sticky.getBoundingClientRect().top <= 0);
+addEventListener('scroll', onScroll, { passive: true });
+onScroll();
+</script>
+</body>
+</html>
