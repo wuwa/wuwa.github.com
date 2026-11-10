@@ -202,6 +202,7 @@ code { font: 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; background: 
   display: flex; flex-wrap: wrap; gap: 16px 26px; align-items: flex-start;
   padding: 12px 14px; border: 1px solid var(--hairline); border-radius: 10px;
   background: var(--panel);
+  position: relative;          /* anchors the resolved panel to the bar's right edge */
 }
 .ctl { display: flex; flex-direction: column; gap: 6px; }
 .ctl > label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--fg-dim); }
@@ -222,6 +223,34 @@ code { font: 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; background: 
 .resolved {
   font: 10.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
   color: var(--fg-dim); white-space: pre;
+}
+/* collapsed by default; opens as a floating panel so it never grows the
+   sticky bar. Not closed on outside clicks: the point is to watch the values
+   while dragging the sliders. */
+.resolved-toggle > summary {
+  list-style: none;
+  display: inline-flex; align-items: center; gap: 7px;
+  border: 1px solid var(--hairline); border-radius: 7px;
+  padding: 5px 11px; font-size: 13px; cursor: pointer; user-select: none;
+}
+.resolved-toggle > summary::-webkit-details-marker { display: none; }
+.resolved-toggle > summary::after {
+  content: ""; width: 6px; height: 6px; margin-top: -3px;
+  border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg); transition: transform 140ms ease, margin 140ms ease;
+}
+.resolved-toggle[open] > summary { background: var(--fg); color: var(--page); border-color: var(--fg); }
+.resolved-toggle[open] > summary::after { transform: rotate(-135deg); margin-top: 3px; }
+.resolved-toggle .when-open,
+.resolved-toggle[open] .when-closed { display: none; }
+.resolved-toggle[open] .when-open { display: inline; }
+.resolved-panel {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 20;
+  max-width: 100%; overflow-x: auto;
+  padding: 10px 12px;
+  background: var(--panel);
+  border: 1px solid var(--hairline); border-radius: 10px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.14);
 }
 
 /* ───────────────────────── the specimen grid ───────────────────────── */
@@ -365,7 +394,10 @@ body.preload .state { transition: none; }
   </div>
   <div class="ctl">
     <label>Resolved</label>
-    <div class="resolved" id="resolved"></div>
+    <details class="resolved-toggle" id="resolved-toggle">
+      <summary><span class="when-closed">Show values</span><span class="when-open">Hide values</span></summary>
+      <div class="resolved-panel"><div class="resolved" id="resolved"></div></div>
+    </details>
   </div>
 </div>
 </div>
@@ -596,6 +628,13 @@ for (const [key, digits] of Object.entries(SLIDERS)) {
   });
 }
 syncSliders();
+
+const resolvedToggle = document.getElementById('resolved-toggle');
+addEventListener('keydown', e => {
+  if (e.key !== 'Escape' || !resolvedToggle.open) return;
+  resolvedToggle.open = false;
+  resolvedToggle.querySelector('summary').focus();
+});
 
 const sticky = document.getElementById('sticky');
 const onScroll = () => sticky.classList.toggle('pinned', sticky.getBoundingClientRect().top <= 0);
